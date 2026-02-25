@@ -9,7 +9,8 @@ import useImage from 'use-image';
 
 interface BattleScreenProps {
   hero: Hero;
-  stage: number;
+  difficulty: number;
+  subStage: number;
   onBattleEnd: (won: boolean, rewards: { gold: number, gems: number, exp: number }, monster: Monster) => void;
 }
 
@@ -23,13 +24,13 @@ interface BattleState {
   commentary: string;
 }
 
-export default function BattleScreen({ hero, stage, onBattleEnd }: BattleScreenProps) {
-  const [monster] = useState(() => generateMonster(stage));
+export default function BattleScreen({ hero, difficulty, subStage, onBattleEnd }: BattleScreenProps) {
+  const [monster] = useState(() => generateMonster(difficulty, subStage));
   const [battleState, setBattleState] = useState<BattleState>({
     heroHp: hero.stats.hp,
     monsterHp: monster.stats.hp,
     turn: hero.stats.spd >= monster.stats.spd ? 'HERO' : 'MONSTER',
-    logs: [`第 ${stage} 关: 野生的 ${monster.name} (Lv.${monster.level}) 出现了！`],
+    logs: [`难度 ${difficulty} - 第 ${subStage} 关: 野生的 ${monster.name} (Lv.${monster.level}) 出现了！`],
     isFinished: false,
     won: false,
     commentary: '',
@@ -92,7 +93,7 @@ export default function BattleScreen({ hero, stage, onBattleEnd }: BattleScreenP
   const handleAttack = useCallback(() => {
     if (battleState.turn !== 'HERO' || battleState.isFinished) return;
 
-    const damage = Math.max(1, hero.stats.atk - monster.stats.def);
+    const damage = Math.max(1, hero.stats.atk);
     const newMonsterHp = Math.max(0, battleState.monsterHp - damage);
     
     setBattleState(prev => ({
@@ -108,7 +109,7 @@ export default function BattleScreen({ hero, stage, onBattleEnd }: BattleScreenP
     }
 
     turnTimeoutRef.current = setTimeout(executeMonsterTurn, 1000 / speed);
-  }, [battleState.turn, battleState.isFinished, battleState.monsterHp, hero.name, hero.stats.atk, monster.name, monster.stats.def, speed, executeMonsterTurn, finishBattle]);
+  }, [battleState.turn, battleState.isFinished, battleState.monsterHp, hero.name, hero.stats.atk, monster.name, speed, executeMonsterTurn, finishBattle]);
 
   const handleSkip = () => {
     // Simulate the rest of the battle instantly
@@ -119,7 +120,7 @@ export default function BattleScreen({ hero, stage, onBattleEnd }: BattleScreenP
 
     while (hHp > 0 && mHp > 0) {
       if (turn === 'HERO') {
-        const damage = Math.max(1, hero.stats.atk - monster.stats.def);
+        const damage = Math.max(1, hero.stats.atk);
         mHp = Math.max(0, mHp - damage);
         logs.unshift(`${hero.name} 对 ${monster.name} 造成了 ${damage} 点伤害！`);
         turn = 'MONSTER';

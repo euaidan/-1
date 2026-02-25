@@ -5,9 +5,9 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sword, Sparkles, Trophy, Users, Coins, Gem, ChevronLeft, Play, Info } from 'lucide-react';
-import { GameState, Player, Hero, Monster, Rarity, Gender, HeroClass, Pet, Stats, Prisoner, MonsterType, Race, Bloodline, InventoryItem, Offspring } from './types';
-import { HERO_NAMES, PET_TEMPLATES } from './constants';
+import { Sword, Sparkles, Trophy, Users, Coins, Gem, ChevronLeft, Play, Info, Save, Upload, Trash2, Database } from 'lucide-react';
+import { GameState, Player, Hero, Monster, Rarity, Gender, HeroClass, Pet, Stats, Prisoner, MonsterType, Race, Bloodline, InventoryItem, Offspring, MentalState, BodyPart } from './types';
+import { HERO_NAMES, PET_TEMPLATES, generateMonster } from './constants';
 import { cn } from './lib/utils';
 
 // Components
@@ -29,6 +29,8 @@ const INITIAL_PLAYER: Player = {
   exp: 0,
   level: 1,
   currentStage: 1,
+  currentSubStage: 1,
+  clearedEliteStages: [],
   collection: [],
   petCollection: [],
   prisoners: [],
@@ -69,16 +71,82 @@ export default function App() {
       bloodlines: parsed.bloodlines || [{ race: Race.HUMAN, purity: 100 }],
       offsprings: (parsed.offsprings || []).map(migrateHero) as Offspring[],
       inventory: parsed.inventory || [],
+      currentSubStage: parsed.currentSubStage || 1,
+      clearedEliteStages: parsed.clearedEliteStages || [],
     };
   });
   const [lastSummoned, setLastSummoned] = useState<Hero[]>([]);
   const [lastSummonedPets, setLastSummonedPets] = useState<Pet[]>([]);
-  const [selectedStage, setSelectedStage] = useState(player.currentStage || 1);
+  const [selectedDifficulty, setSelectedDifficulty] = useState(player.currentStage || 1);
   const [selectedOffspringId, setSelectedOffspringId] = useState<string | null>(null);
 
   useEffect(() => {
-    localStorage.setItem('mythic_summoner_player_v2', JSON.stringify(player));
-  }, [player]);
+    const interval = setInterval(() => {
+      setPlayer(prev => {
+        let changed = false;
+        const now = Date.now();
+        const newOffsprings: Offspring[] = [];
+
+        const prisoners = prev.prisoners.map(p => {
+          if (p.isPregnant && p.pregnancyEndTime && now >= p.pregnancyEndTime) {
+            changed = true;
+            // Pregnancy finished - generate offspring
+            const weights: Record<Rarity, number> = {
+              [Rarity.C]: 1, [Rarity.B]: 2, [Rarity.A]: 5, [Rarity.S]: 15, [Rarity.SS]: 40, [Rarity.SSS]: 100,
+            };
+            const parentWeight = weights[p.rarity];
+            const roll = Math.random();
+            let rarity = Rarity.C;
+            if (roll < parentWeight / 1000) rarity = Rarity.SSS;
+            else if (roll < parentWeight / 200) rarity = Rarity.SS;
+            else if (roll < parentWeight / 50) rarity = Rarity.S;
+            else if (roll < parentWeight / 20) rarity = Rarity.A;
+            else if (roll < parentWeight / 5) rarity = Rarity.B;
+
+            const offspring: Offspring = {
+              id: Math.random().toString(36).substr(2, 9),
+              name: `${p.name}之子`,
+              rarity,
+              class: p.class,
+              gender: Math.random() > 0.5 ? Gender.MALE : Gender.FEMALE,
+              race: p.race,
+              bloodlines: p.bloodlines,
+              level: 1,
+              exp: 0,
+              maxExp: 100,
+              stats: { hp: 100, maxHp: 100, atk: 20, def: 10, spd: 10, skill: 10 },
+              description: "在囚牢中诞下的后代。",
+              rating: Math.floor(Math.random() * 50) + 50,
+              affection: 30,
+              isAdult: false,
+              trainingCount: 0,
+              motherId: p.id,
+              fatherId: 'player',
+              parents: [p.id, 'player'],
+              grandparents: p.bloodlines.map(b => b.race).slice(0, 2) // Simplified
+            };
+            newOffsprings.push(offspring);
+            return { ...p, isPregnant: false, pregnancyEndTime: undefined };
+          }
+          
+          if (p.mentalState === MentalState.BREAKDOWN && Math.random() < 0.01) {
+             changed = true;
+             return null; // Suicide
+          }
+          
+          return p;
+        }).filter(p => p !== null) as Prisoner[];
+
+        if (!changed && newOffsprings.length === 0) return prev;
+        return { 
+          ...prev, 
+          prisoners, 
+          offsprings: [...prev.offsprings, ...newOffsprings] 
+        };
+      });
+    }, 60000); // Every minute
+    return () => clearInterval(interval);
+  }, []);
 
   // If player already has a gender, skip selection
   useEffect(() => {
@@ -277,7 +345,8 @@ export default function App() {
       race: Race.HUMAN,
       bloodlines,
       will: 100,
-      stats: { ...monster.stats }
+      stats: { ...monster.stats },
+      affection: 0
     };
 
     setPlayer(prev => ({
@@ -288,25 +357,32 @@ export default function App() {
 
   const handleHeroLevelUp = useCallback((heroId: string, expGain: number) => {
     setPlayer(prev => {
-      const collection = prev.collection.map(h => {
+      const updateList = (list: any[]) => list.map(h => {
         if (h.id !== heroId) return h;
         
         let newExp = h.exp + expGain;
         let newLevel = h.level;
         let newMaxExp = h.maxExp;
         let newStats = { ...h.stats };
+        let isBreakthroughRequired = h.isBreakthroughRequired || false;
 
-        while (newExp >= newMaxExp) {
+        while (newExp >= newMaxExp && newLevel < 80 && !isBreakthroughRequired) {
+          // Check for breakthrough at 20, 40, 60
+          if ((newLevel === 20 || newLevel === 40 || newLevel === 60)) {
+            isBreakthroughRequired = true;
+            break;
+          }
+
           newExp -= newMaxExp;
           newLevel++;
-          newMaxExp = Math.floor(newMaxExp * 1.2);
-          // Stats increase on level up
-          newStats.hp = Math.floor(newStats.hp * 1.1);
+          newMaxExp = Math.floor(newMaxExp * 1.1);
+          // Stats increase on level up - 1% increase
+          newStats.hp = Math.floor(newStats.hp * 1.01);
           newStats.maxHp = newStats.hp;
-          newStats.atk = Math.floor(newStats.atk * 1.1);
-          newStats.def = Math.floor(newStats.def * 1.1);
-          newStats.spd += 1;
-          newStats.skill = Math.floor(newStats.skill * 1.1);
+          newStats.atk = Math.floor(newStats.atk * 1.01);
+          newStats.def = Math.floor(newStats.def * 1.01);
+          newStats.spd = Math.floor(newStats.spd * 1.01) || newStats.spd + 1;
+          newStats.skill = Math.floor(newStats.skill * 1.01);
         }
 
         return {
@@ -315,29 +391,123 @@ export default function App() {
           exp: newExp,
           maxExp: newMaxExp,
           stats: newStats,
+          isBreakthroughRequired,
           rating: Math.floor(newStats.hp / 5 + newStats.atk + newStats.def + newStats.spd + newStats.skill)
         };
       });
 
+      return { 
+        ...prev, 
+        collection: updateList(prev.collection),
+        offsprings: updateList(prev.offsprings)
+      };
+    });
+  }, []);
+
+  const handleManualLevelUp = useCallback((heroId: string) => {
+    setPlayer(prev => {
+      const hero = [...prev.collection, ...prev.offsprings].find(h => h.id === heroId);
+      if (!hero || hero.level >= 80) return prev;
+      
+      // Breakthrough check
+      if (hero.isBreakthroughRequired) {
+        const cost = hero.level * 100;
+        if (prev.gold < cost) return prev;
+        
+        const updateList = (list: any[]) => list.map(h => h.id === heroId ? { ...h, isBreakthroughRequired: false } : h);
+        
+        const nextState = {
+          ...prev,
+          gold: prev.gold - cost,
+          collection: updateList(prev.collection),
+          offsprings: updateList(prev.offsprings)
+        };
+        
+        // Trigger level up check again after breakthrough
+        setTimeout(() => handleHeroLevelUp(heroId, 0), 0);
+        return nextState;
+      }
+
+      // Use player EXP to level up hero? Or just check if they have enough hero EXP
+      // The request says "角色点击的等级可以升级", usually this means spending a resource.
+      // I'll implement it as: if they have enough EXP, level up. If not, maybe spend player EXP?
+      // Let's assume it's just a manual trigger for the level up check if it got stuck or for breakthrough.
+      handleHeroLevelUp(heroId, 0);
+      return prev;
+    });
+  }, [handleHeroLevelUp]);
+
+  const handleExportData = useCallback(() => {
+    const data = JSON.stringify(player);
+    const blob = new Blob([data], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mythic_summoner_save_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [player]);
+
+  const handleImportData = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = JSON.parse(event.target?.result as string);
+        setPlayer(data);
+        alert('数据导入成功！');
+      } catch (err) {
+        alert('数据导入失败，请检查文件格式。');
+      }
+    };
+    reader.readAsText(file);
+  }, []);
+
+  const handleClearData = useCallback(() => {
+    if (window.confirm('确定要清除所有存档数据吗？此操作不可撤销。')) {
+      localStorage.removeItem('mythic_summoner_player_v2');
+      window.location.reload();
+    }
+  }, []);
+
+  const handleChat = useCallback((heroId: string) => {
+    setPlayer(prev => {
+      const collection = prev.collection.map(h => {
+        if (h.id !== heroId) return h;
+        return { ...h, affection: h.affection + 5 };
+      });
       return { ...prev, collection };
     });
   }, []);
 
-  const handleStartBreeding = useCallback((heroId: string) => {
+  const handleTryBreeding = useCallback((heroId: string, partnerId?: string) => {
     setPlayer(prev => {
-      const hero = prev.collection.find(h => h.id === heroId);
+      const hero = prev.collection.find(h => h.id === heroId) || prev.offsprings.find(o => o.id === heroId);
       if (!hero || hero.isBreeding || (hero.breedingCooldownEnd && Date.now() < hero.breedingCooldownEnd)) return prev;
 
-      const collection = prev.collection.map(h => {
-        if (h.id !== heroId) return h;
-        return {
-          ...h,
-          isBreeding: true,
-          breedingEndTime: Date.now() + 5 * 60 * 1000, // 5 minutes
-        };
-      });
+      const attempts = (hero.pregnancyAttempts || 0) + 1;
+      const success = Math.random() < 0.1 || attempts >= 10;
 
-      return { ...prev, collection };
+      const updateHero = (h: any) => {
+        if (h.id !== heroId) return h;
+        const updates: any = { 
+          affection: h.affection + 10,
+          pregnancyAttempts: success ? 0 : attempts 
+        };
+        if (success) {
+          updates.isBreeding = true;
+          updates.breedingEndTime = Date.now() + 5 * 60 * 1000;
+          updates.fatherId = partnerId; // If partnerId is provided, it's the father
+        }
+        return { ...h, ...updates };
+      };
+
+      return {
+        ...prev,
+        collection: prev.collection.map(updateHero),
+        offsprings: prev.offsprings.map(updateHero) as Offspring[]
+      };
     });
   }, []);
 
@@ -368,8 +538,11 @@ export default function App() {
 
   const handleClaimOffspring = useCallback((heroId: string) => {
     setPlayer(prev => {
-      const hero = prev.collection.find(h => h.id === heroId);
+      const hero = prev.collection.find(h => h.id === heroId) || prev.offsprings.find(o => o.id === heroId);
       if (!hero || !hero.isBreeding || !hero.breedingEndTime || Date.now() < hero.breedingEndTime) return prev;
+
+      const fatherId = (hero as any).fatherId;
+      const father = prev.collection.find(h => h.id === fatherId) || prev.offsprings.find(o => o.id === fatherId) || { bloodlines: prev.bloodlines, parents: [] };
 
       // Generate Offspring
       const weights: Record<Rarity, number> = {
@@ -386,7 +559,7 @@ export default function App() {
 
       // Bloodline
       const combined: Record<string, number> = {};
-      [...prev.bloodlines, ...hero.bloodlines].forEach(b => {
+      [...father.bloodlines, ...hero.bloodlines].forEach(b => {
         combined[b.race] = (combined[b.race] || 0) + b.purity / 2;
       });
       let bloodlines = Object.entries(combined).map(([race, purity]) => ({ race: race as Race, purity }));
@@ -419,26 +592,30 @@ export default function App() {
         stats: { hp: 100, maxHp: 100, atk: 20, def: 10, spd: 10, skill: 10 },
         description: "继承了强大血统的后代。",
         rating: Math.floor(Math.random() * 50) + 50,
-        affection: 0,
+        affection: 30,
         isAdult: false,
         trainingCount: 0,
-        motherId: hero.id
+        motherId: hero.id,
+        fatherId: fatherId || 'player',
+        parents: [hero.id, fatherId || 'player'],
+        grandparents: [...(hero.parents || []), ...(father.parents || [])].slice(0, 4)
       };
 
-      const collection = prev.collection.map(h => {
+      const updateHero = (h: any) => {
         if (h.id !== heroId) return h;
         return {
           ...h,
           isBreeding: false,
           breedingEndTime: undefined,
           breedingCooldownEnd: Date.now() + 60 * 60 * 1000, // 1 hour
+          fatherId: undefined
         };
-      });
+      };
 
       return {
         ...prev,
-        collection,
-        offsprings: [...prev.offsprings, offspring]
+        collection: prev.collection.map(updateHero),
+        offsprings: [...prev.offsprings.map(updateHero) as Offspring[], offspring]
       };
     });
   }, []);
@@ -561,10 +738,167 @@ export default function App() {
   }, []);
 
   const handleExecute = useCallback((id: string) => {
-    setPlayer(prev => ({
-      ...prev,
-      prisoners: prev.prisoners.filter(p => p.id !== id)
-    }));
+    setPlayer(prev => {
+      const prisoner = prev.prisoners.find(p => p.id === id);
+      if (!prisoner) return prev;
+      
+      const gemRewards: Record<Rarity, number> = {
+        [Rarity.C]: 10, [Rarity.B]: 20, [Rarity.A]: 50, [Rarity.S]: 100, [Rarity.SS]: 200, [Rarity.SSS]: 500
+      };
+      
+      return {
+        ...prev,
+        gems: prev.gems + gemRewards[prisoner.rarity],
+        prisoners: prev.prisoners.filter(p => p.id !== id)
+      };
+    });
+  }, []);
+
+  const handleBulkExecute = useCallback((rarities: Rarity[]) => {
+    setPlayer(prev => {
+      let gemGain = 0;
+      const gemRewards: Record<Rarity, number> = {
+        [Rarity.C]: 10, [Rarity.B]: 20, [Rarity.A]: 50, [Rarity.S]: 100, [Rarity.SS]: 200, [Rarity.SSS]: 500
+      };
+
+      const remainingPrisoners = prev.prisoners.filter(p => {
+        if (rarities.includes(p.rarity) && !p.isLocked) {
+          gemGain += gemRewards[p.rarity];
+          return false;
+        }
+        return true;
+      });
+
+      const remainingCollection = prev.collection.filter(h => {
+        if (rarities.includes(h.rarity) && !h.isLocked) {
+          gemGain += gemRewards[h.rarity];
+          return false;
+        }
+        return true;
+      });
+
+      const remainingOffsprings = prev.offsprings.filter(o => {
+        if (rarities.includes(o.rarity) && !o.isLocked) {
+          gemGain += gemRewards[o.rarity];
+          return false;
+        }
+        return true;
+      });
+
+      return {
+        ...prev,
+        gems: prev.gems + gemGain,
+        prisoners: remainingPrisoners,
+        collection: remainingCollection,
+        offsprings: remainingOffsprings
+      };
+    });
+  }, []);
+
+  const handleSexualPunishment = useCallback((id: string, part: BodyPart) => {
+    setPlayer(prev => {
+      const prisoner = prev.prisoners.find(p => p.id === id);
+      if (!prisoner) return prev;
+
+      const isPregnancyPart = part === BodyPart.VAGINA || part === BodyPart.ANUS;
+      const attempts = (prisoner.pregnancyAttempts || 0) + 1;
+      const success = isPregnancyPart && (Math.random() < 0.2 || attempts >= 10);
+
+      const prisoners = prev.prisoners.map(p => {
+        if (p.id !== id) return p;
+        
+        const updates: Partial<Prisoner> = {
+          will: Math.max(0, p.will - 15),
+          pregnancyAttempts: success ? 0 : attempts
+        };
+
+        if (success) {
+          const consecutive = (p.consecutivePregnancies || 0) + 1;
+          updates.isPregnant = true;
+          updates.pregnancyEndTime = Date.now() + 5 * 60 * 1000;
+          updates.consecutivePregnancies = consecutive;
+          
+          if (consecutive >= 3) {
+            const breakdownChance = 0.05 * (consecutive - 2);
+            if (Math.random() < breakdownChance) {
+              updates.mentalState = MentalState.BREAKDOWN;
+            }
+          }
+        }
+
+        return { ...p, ...updates };
+      });
+
+      return { ...prev, prisoners };
+    });
+  }, []);
+
+  const handleSpeedUpPrisonerPregnancy = useCallback((id: string) => {
+    setPlayer(prev => {
+      if (prev.gems < 50) return prev;
+      
+      const prisoners = prev.prisoners.map(p => {
+        if (p.id !== id || !p.isPregnant) return p;
+        return { ...p, pregnancyEndTime: Date.now() }; // Set to now so the interval picks it up
+      });
+
+      return {
+        ...prev,
+        gems: prev.gems - 50,
+        prisoners
+      };
+    });
+  }, []);
+
+  const handleSendToPrison = useCallback((id: string, type: 'hero' | 'offspring') => {
+    setPlayer(prev => {
+      const list = type === 'hero' ? prev.collection : prev.offsprings;
+      const target = list.find(x => x.id === id);
+      if (!target) return prev;
+
+      const newPrisoner: Prisoner = {
+        id: target.id,
+        name: target.name,
+        gender: target.gender,
+        class: target.class,
+        rarity: target.rarity,
+        race: target.race,
+        bloodlines: target.bloodlines,
+        will: 100,
+        stats: { ...target.stats },
+        affection: Math.max(0, target.affection - 50)
+      };
+
+      return {
+        ...prev,
+        collection: prev.collection.filter(h => h.id !== id),
+        offsprings: prev.offsprings.filter(o => o.id !== id),
+        prisoners: [...prev.prisoners, newPrisoner]
+      };
+    });
+  }, []);
+
+  const handleToggleLock = useCallback((id: string, type: 'hero' | 'offspring' | 'prisoner') => {
+    setPlayer(prev => {
+      const update = (list: any[]) => list.map(item => item.id === id ? { ...item, isLocked: !item.isLocked } : item);
+      return {
+        ...prev,
+        collection: type === 'hero' ? update(prev.collection) : prev.collection,
+        offsprings: type === 'offspring' ? update(prev.offsprings) : prev.offsprings,
+        prisoners: type === 'prisoner' ? update(prev.prisoners) : prev.prisoners,
+      };
+    });
+  }, []);
+
+  const handleTogglePin = useCallback((id: string, type: 'hero' | 'offspring') => {
+    setPlayer(prev => {
+      const update = (list: any[]) => list.map(item => item.id === id ? { ...item, isPinned: !item.isPinned } : item);
+      return {
+        ...prev,
+        collection: type === 'hero' ? update(prev.collection) : prev.collection,
+        offsprings: type === 'offspring' ? update(prev.offsprings) : prev.offsprings,
+      };
+    });
   }, []);
 
   const handleTorture = useCallback((id: string, type: 'wax' | 'whip' | 'toy') => {
@@ -573,6 +907,61 @@ export default function App() {
       ...prev,
       prisoners: prev.prisoners.map(p => p.id === id ? { ...p, will: Math.max(0, p.will - willLoss) } : p)
     }));
+  }, []);
+
+  const handleBattleEnd = useCallback((won: boolean, rewards: { gold: number, gems: number, exp: number }, monster: Monster) => {
+    if (won) {
+      setPlayer(prev => {
+        let nextSubStage = prev.currentSubStage + 1;
+        let nextDifficulty = prev.currentStage;
+        const clearedEliteStages = [...prev.clearedEliteStages];
+
+        if (monster.type === MonsterType.ELITE || monster.type === MonsterType.BOSS) {
+          clearedEliteStages.push(`${prev.currentStage}-${prev.currentSubStage}`);
+          nextDifficulty = prev.currentStage + 1;
+          nextSubStage = 1;
+        }
+
+        return {
+          ...prev,
+          gold: prev.gold + rewards.gold,
+          gems: prev.gems + rewards.gems,
+          exp: prev.exp + rewards.exp,
+          currentStage: nextDifficulty,
+          currentSubStage: nextSubStage,
+          clearedEliteStages
+        };
+      });
+      if (player.activeHeroId) handleHeroLevelUp(player.activeHeroId, rewards.exp);
+      handleCapture(monster, monster.type === MonsterType.BOSS);
+    } else {
+      if (monster.type === MonsterType.ELITE || monster.type === MonsterType.BOSS) {
+        setPlayer(prev => ({ ...prev, currentSubStage: 1 }));
+      }
+      setGameState(GameState.LOBBY);
+    }
+  }, [player.activeHeroId, handleHeroLevelUp, handleCapture]);
+
+  const handleSweep = useCallback((difficulty: number) => {
+    setPlayer(prev => {
+      let totalGold = 0;
+      let totalGems = 0;
+      let totalExp = 0;
+
+      for (let i = 1; i <= 10; i++) {
+        const m = generateMonster(difficulty, i);
+        totalGold += m.rewards.gold;
+        totalGems += m.rewards.gems;
+        totalExp += m.rewards.exp;
+      }
+
+      return {
+        ...prev,
+        gold: prev.gold + totalGold,
+        gems: prev.gems + totalGems,
+        exp: prev.exp + totalExp
+      };
+    });
   }, []);
 
   const handleEquipPet = useCallback((heroId: string, petId: string | null) => {
@@ -611,10 +1000,34 @@ export default function App() {
               <Gem className="w-3 h-3 sm:w-4 sm:h-4 text-cyan-400" />
               <span className="text-xs sm:text-sm font-mono font-bold">{player.gems}</span>
             </div>
+            <div className="flex items-center gap-1.5 sm:gap-2 bg-white/5 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full border border-white/10">
+              <Trophy className="w-3 h-3 sm:w-4 sm:h-4 text-emerald-400" />
+              <span className="text-xs sm:text-sm font-mono font-bold">{player.exp}</span>
+            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-white/5 rounded-lg border border-white/10">
+            <button 
+              onClick={handleExportData}
+              title="导出存档"
+              className="p-1.5 hover:bg-white/10 rounded transition-colors text-white/60 hover:text-white"
+            >
+              <Save className="w-3.5 h-3.5" />
+            </button>
+            <label className="p-1.5 hover:bg-white/10 rounded transition-colors text-white/60 hover:text-white cursor-pointer">
+              <Upload className="w-3.5 h-3.5" />
+              <input type="file" className="hidden" onChange={handleImportData} accept=".json" />
+            </label>
+            <button 
+              onClick={handleClearData}
+              title="清除存档"
+              className="p-1.5 hover:bg-red-500/20 rounded transition-colors text-red-500/60 hover:text-red-500"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </div>
           {gameState !== GameState.LOBBY && gameState !== GameState.GENDER_SELECT && (
             <button 
               onClick={() => setGameState(GameState.LOBBY)}
@@ -661,11 +1074,13 @@ export default function App() {
               player={player}
               activeHero={activeHero}
               activePet={activePet}
-              currentStage={player.currentStage || 1}
-              selectedStage={selectedStage}
-              onSelectStage={setSelectedStage}
+              currentDifficulty={player.currentStage || 1}
+              selectedDifficulty={selectedDifficulty}
+              onSelectDifficulty={setSelectedDifficulty}
               onNavigate={setGameState}
               onRenameHero={renameHero}
+              onSweep={handleSweep}
+              onManualLevelUp={handleManualLevelUp}
             />
           )}
           {gameState === GameState.GACHA && (
@@ -689,25 +1104,9 @@ export default function App() {
             <BattleScreen 
               key="battle"
               hero={activeHero!}
-              stage={selectedStage}
-              onBattleEnd={(won, rewards, monster) => {
-                if (won) {
-                  const nextStage = selectedStage + 1;
-                  updatePlayerStats({
-                    gold: player.gold + rewards.gold,
-                    gems: player.gems + rewards.gems,
-                    exp: player.exp + rewards.exp,
-                    currentStage: Math.max(player.currentStage || 1, nextStage)
-                  });
-                  handleHeroLevelUp(activeHero!.id, rewards.exp);
-                  handleCapture(monster, monster.type === MonsterType.BOSS);
-                  
-                  // Auto next stage
-                  setSelectedStage(nextStage);
-                } else {
-                  setGameState(GameState.LOBBY);
-                }
-              }}
+              difficulty={player.currentStage}
+              subStage={player.currentSubStage}
+              onBattleEnd={handleBattleEnd}
             />
           )}
           {gameState === GameState.COLLECTION && (
@@ -723,6 +1122,9 @@ export default function App() {
                 setGameState(GameState.OFFSPRING_TRAINING);
               }}
               onChangePlayerBloodline={handleChangePlayerBloodline}
+              onToggleLock={handleToggleLock}
+              onTogglePin={handleTogglePin}
+              onBulkExecute={handleBulkExecute}
             />
           )}
           {gameState === GameState.PRISON && (
@@ -732,6 +1134,10 @@ export default function App() {
               onPersuade={handlePersuade}
               onExecute={handleExecute}
               onTorture={handleTorture}
+              onSexualPunishment={handleSexualPunishment}
+              onToggleLock={handleToggleLock}
+              onBulkExecute={handleBulkExecute}
+              onSpeedUpPregnancy={handleSpeedUpPrisonerPregnancy}
             />
           )}
           {gameState === GameState.INTERACTION && (
@@ -743,9 +1149,10 @@ export default function App() {
               onUpdateStats={updatePlayerStats}
               onRenameHero={renameHero}
               onUpdateGender={updateHeroGender}
-              onStartBreeding={handleStartBreeding}
+              onStartBreeding={handleTryBreeding}
               onSpeedUpBreeding={handleSpeedUpBreeding}
               onClaimOffspring={handleClaimOffspring}
+              onManualLevelUp={handleManualLevelUp}
             />
           )}
           {gameState === GameState.SHOP && (

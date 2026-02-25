@@ -15,6 +15,7 @@ interface InteractionScreenProps {
   onStartBreeding: (id: string) => void;
   onSpeedUpBreeding: (id: string, type: InventoryItem['type']) => void;
   onClaimOffspring: (id: string) => void;
+  onManualLevelUp: (id: string) => void;
 }
 
 export default function InteractionScreen({ 
@@ -26,7 +27,8 @@ export default function InteractionScreen({
   onUpdateGender,
   onStartBreeding,
   onSpeedUpBreeding,
-  onClaimOffspring
+  onClaimOffspring,
+  onManualLevelUp
 }: InteractionScreenProps) {
   const [chatMessage, setChatMessage] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
@@ -104,7 +106,21 @@ export default function InteractionScreen({
                 <Heart className="w-4 h-4 text-red-500 fill-red-500" />
                 <span className="text-lg font-bold">好感度: {activeHero.affection}</span>
               </div>
-              <h2 className="text-2xl font-bold">{activeHero.name}</h2>
+              <div className="flex items-center gap-3 mb-2">
+                <h2 className="text-2xl font-bold">{activeHero.name}</h2>
+                <button 
+                  onClick={() => onManualLevelUp(activeHero.id)}
+                  disabled={activeHero.level >= 80}
+                  className={cn(
+                    "px-2 py-0.5 border rounded text-[10px] font-bold transition-all",
+                    activeHero.isBreakthroughRequired 
+                      ? "bg-red-500/20 text-red-400 border-red-500/30 animate-pulse" 
+                      : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/40"
+                  )}
+                >
+                  {activeHero.isBreakthroughRequired ? `突破 (需${activeHero.level * 100}金币)` : `LV.${activeHero.level}`}
+                </button>
+              </div>
               <p className="text-white/60 text-xs">{activeHero.class} | {activeHero.gender}</p>
             </div>
           </div>
@@ -113,6 +129,26 @@ export default function InteractionScreen({
 
       {/* Interaction Controls */}
       <div className="w-full md:w-80 flex flex-col gap-3 overflow-y-auto pr-2">
+        {/* Stats Panel */}
+        <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-4 grid grid-cols-2 gap-3">
+          <div className="flex flex-col">
+            <span className="text-[10px] text-white/40 uppercase font-mono">生命</span>
+            <span className="text-sm font-bold font-mono">{activeHero.stats.hp}</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] text-white/40 uppercase font-mono">攻击</span>
+            <span className="text-sm font-bold font-mono">{activeHero.stats.atk}</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] text-white/40 uppercase font-mono">防御</span>
+            <span className="text-sm font-bold font-mono">{activeHero.stats.def}</span>
+          </div>
+          <div className="flex flex-col">
+            <span className="text-[10px] text-white/40 uppercase font-mono">速度</span>
+            <span className="text-sm font-bold font-mono">{activeHero.stats.spd}</span>
+          </div>
+        </div>
+
         {/* Basic Actions */}
         <div className="grid grid-cols-2 gap-3">
           <ActionButton 

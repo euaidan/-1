@@ -10,11 +10,13 @@ interface LobbyProps {
   player: Player;
   activeHero: Hero | null;
   activePet: Pet | null;
-  currentStage: number;
-  selectedStage: number;
-  onSelectStage: (stage: number) => void;
+  currentDifficulty: number;
+  selectedDifficulty: number;
+  onSelectDifficulty: (difficulty: number) => void;
   onNavigate: (state: GameState) => void;
   onRenameHero: (id: string, name: string) => void;
+  onSweep: (difficulty: number) => void;
+  onManualLevelUp: (id: string) => void;
 }
 
 const RARITY_COLORS = {
@@ -39,11 +41,13 @@ export default function Lobby({
   player, 
   activeHero, 
   activePet, 
-  currentStage,
-  selectedStage,
-  onSelectStage,
+  currentDifficulty,
+  selectedDifficulty,
+  onSelectDifficulty,
   onNavigate, 
-  onRenameHero 
+  onRenameHero,
+  onSweep,
+  onManualLevelUp
 }: LobbyProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(activeHero?.name || '');
@@ -65,11 +69,11 @@ export default function Lobby({
       className="h-full flex flex-col md:flex-row p-3 gap-3"
     >
       {/* Left Side: Hero Display */}
-      <div className="flex-1 relative group min-h-[400px] md:min-h-0">
+      <div className="flex-1 relative group min-h-[300px] md:min-h-0">
         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent z-10" />
         {activeHero ? (
           <div className="h-full rounded-3xl overflow-hidden border border-white/10 bg-zinc-900/50 flex flex-col">
-            <div className="relative flex-1 flex flex-col p-6 z-20">
+            <div className="relative flex-1 flex flex-col p-4 z-20">
               {/* Pet Overlay */}
               <div className="absolute top-4 right-4 z-30">
                 {activePet && <PetWidget pet={activePet} />}
@@ -111,7 +115,18 @@ export default function Lobby({
                       </button>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 rounded text-[10px] font-bold">LV.{activeHero.level}</span>
+                      <button 
+                        onClick={() => onManualLevelUp(activeHero.id)}
+                        disabled={activeHero.level >= 80}
+                        className={cn(
+                          "px-2 py-0.5 border rounded text-[10px] font-bold transition-all",
+                          activeHero.isBreakthroughRequired 
+                            ? "bg-red-500/20 text-red-400 border-red-500/30 animate-pulse" 
+                            : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/40"
+                        )}
+                      >
+                        {activeHero.isBreakthroughRequired ? `突破 (需${activeHero.level * 100}金币)` : `LV.${activeHero.level}`}
+                      </button>
                       <div className="w-24 sm:w-32 h-1.5 bg-white/10 rounded-full overflow-hidden border border-white/5">
                         <motion.div 
                           className="h-full bg-emerald-500"
@@ -138,7 +153,7 @@ export default function Lobby({
 
               <p className="text-white/60 text-xs sm:text-sm max-w-md mb-4 sm:mb-6 line-clamp-2 sm:line-clamp-none">{activeHero.description}</p>
               
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 mt-auto">
+              <div className="grid grid-cols-4 gap-2 mt-auto">
                 <StatBox icon={<Heart className="w-3 h-3 sm:w-4 sm:h-4 text-red-400" />} label="生命" value={activeHero.stats.hp} />
                 <StatBox icon={<Sword className="w-3 h-3 sm:w-4 sm:h-4 text-orange-400" />} label="攻击" value={activeHero.stats.atk} />
                 <StatBox icon={<Shield className="w-3 h-3 sm:w-4 sm:h-4 text-blue-400" />} label="防御" value={activeHero.stats.def} />
@@ -165,20 +180,20 @@ export default function Lobby({
       <div className="w-full md:w-80 flex flex-col gap-2 overflow-y-auto pr-2">
         {/* Stage Selector */}
         <div className="bg-zinc-900 border border-white/10 rounded-2xl p-3 mb-2">
-          <div className="text-[10px] text-white/40 font-mono uppercase mb-2">关卡选择</div>
+          <div className="text-[10px] text-white/40 font-mono uppercase mb-2">难度选择</div>
           <div className="flex items-center justify-between gap-2">
             <button 
-              onClick={() => onSelectStage(Math.max(1, selectedStage - 1))}
+              onClick={() => onSelectDifficulty(Math.max(1, selectedDifficulty - 1))}
               className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10"
             >
               <X className="w-4 h-4 rotate-45" />
             </button>
             <div className="flex-1 text-center">
-              <div className="text-lg font-bold font-mono">STAGE {selectedStage}</div>
-              <div className="text-[9px] text-white/40">最高可挑战: {currentStage}</div>
+              <div className="text-lg font-bold font-mono">难度 {selectedDifficulty}</div>
+              <div className="text-[9px] text-white/40">当前进度: {player.currentSubStage}/11</div>
             </div>
             <button 
-              onClick={() => onSelectStage(Math.min(currentStage, selectedStage + 1))}
+              onClick={() => onSelectDifficulty(Math.min(currentDifficulty, selectedDifficulty + 1))}
               className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10"
             >
               <Play className="w-4 h-4" />
@@ -187,18 +202,24 @@ export default function Lobby({
           <input 
             type="range" 
             min="1" 
-            max={currentStage} 
-            value={selectedStage} 
-            onChange={(e) => onSelectStage(parseInt(e.target.value))}
+            max={currentDifficulty} 
+            value={selectedDifficulty} 
+            onChange={(e) => onSelectDifficulty(parseInt(e.target.value))}
             className="w-full mt-3 accent-emerald-500"
           />
+          <button 
+            onClick={() => onSweep(selectedDifficulty)}
+            className="w-full mt-3 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-500 border border-yellow-500/30 rounded-xl text-xs font-bold transition-all"
+          >
+            扫荡普通关卡 (1-10)
+          </button>
         </div>
 
         <div className="grid grid-cols-2 gap-2">
           <NavButton 
             icon={<Play className="w-6 h-6" />}
             title="战斗"
-            description={isBreeding ? "孕育中不可战斗" : "挑战怪物"}
+            description={isBreeding ? "孕育中不可战斗" : `挑战关卡 ${player.currentSubStage}`}
             onClick={() => activeHero && !isBreeding && onNavigate(GameState.BATTLE)}
             disabled={!activeHero || isBreeding}
             primary
@@ -248,12 +269,12 @@ export default function Lobby({
 
 function StatBox({ icon, label, value }: { icon: React.ReactNode, label: string, value: number }) {
   return (
-    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-3">
-      <div className="flex items-center gap-2 mb-1">
+    <div className="bg-black/40 backdrop-blur-md border border-white/10 rounded-xl p-1.5 sm:p-3">
+      <div className="flex items-center gap-1 sm:gap-2 mb-1">
         {icon}
-        <span className="text-[10px] font-mono text-white/40 uppercase">{label}</span>
+        <span className="text-[8px] sm:text-[10px] font-mono text-white/40 uppercase">{label}</span>
       </div>
-      <div className="text-lg font-mono font-bold">{value}</div>
+      <div className="text-sm sm:text-lg font-mono font-bold">{value}</div>
     </div>
   );
 }

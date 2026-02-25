@@ -11,6 +11,21 @@ export enum GameState {
   OFFSPRING_TRAINING = 'OFFSPRING_TRAINING'
 }
 
+export enum MentalState {
+  NORMAL = '正常',
+  BREAKDOWN = '崩溃'
+}
+
+export enum BodyPart {
+  FACE = '脸部',
+  NIPPLES = '乳头',
+  WAIST = '腰部',
+  CHEST = '胸口',
+  VAGINA = '小穴',
+  CLITORIS = '阴蒂',
+  ANUS = '屁眼'
+}
+
 export enum Rarity {
   C = 'C',
   B = 'B',
@@ -82,12 +97,19 @@ export interface Hero {
   isBreeding?: boolean;
   breedingEndTime?: number;
   breedingCooldownEnd?: number;
+  pregnancyAttempts?: number;
+  isLocked?: boolean;
+  isPinned?: boolean;
+  isBreakthroughRequired?: boolean;
+  parents?: string[];
+  grandparents?: string[];
 }
 
 export interface Offspring extends Hero {
   isAdult: boolean;
   trainingCount: number;
   motherId: string;
+  fatherId?: string;
 }
 
 export interface InventoryItem {
@@ -107,6 +129,13 @@ export interface Prisoner {
   bloodlines: Bloodline[];
   will: number; // 0-100, 0 means can be persuaded
   stats: Stats;
+  affection: number;
+  isLocked?: boolean;
+  consecutivePregnancies?: number;
+  mentalState?: MentalState;
+  isPregnant?: boolean;
+  pregnancyEndTime?: number;
+  pregnancyAttempts?: number;
 }
 
 export interface Monster {
@@ -139,7 +168,9 @@ export interface Player {
   gems: number;
   exp: number;
   level: number;
-  currentStage: number;
+  currentStage: number; // This will now represent "Difficulty"
+  currentSubStage: number; // 1-11
+  clearedEliteStages: string[]; // "difficulty-substage"
   collection: Hero[];
   petCollection: Pet[];
   prisoners: Prisoner[];
