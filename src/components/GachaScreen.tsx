@@ -171,6 +171,7 @@ export default function GachaScreen({ player, onSummon, onSetTargetRace, lastSum
                     {RARITY_LABELS[hero.rarity]} | {hero.race}
                   </div>
                   <div className="text-sm font-bold truncate w-full">{hero.name}</div>
+                  <div className="mt-1 text-[10px] text-white/40 line-clamp-2 italic">"{hero.description}"</div>
                   <div className="mt-2 flex flex-col gap-1 w-full">
                     <div className="flex items-center justify-between text-[9px] text-white/40">
                       <span>血统:</span>

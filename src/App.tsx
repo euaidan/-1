@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sword, Sparkles, Trophy, Users, Coins, Gem, ChevronLeft, Play, Info, Save, Upload, Trash2, Database } from 'lucide-react';
+import { Sword, Sparkles, Trophy, Users, Coins, Gem, ChevronLeft, Play, Info, Save, Upload, Trash2, Database, Settings } from 'lucide-react';
 import { GameState, Player, Hero, Monster, Rarity, Gender, HeroClass, Pet, Stats, Prisoner, MonsterType, Race, Bloodline, InventoryItem, Offspring, MentalState, BodyPart } from './types';
 import { HERO_NAMES, PET_TEMPLATES, generateMonster } from './constants';
 import { cn } from './lib/utils';
@@ -20,6 +20,8 @@ import InteractionScreen from './components/InteractionScreen';
 import PrisonScreen from './components/PrisonScreen';
 import ShopScreen from './components/ShopScreen';
 import OffspringTrainingScreen from './components/OffspringTrainingScreen';
+import LevelUpModal from './components/LevelUpModal';
+import SettingsModal from './components/SettingsModal';
 
 const INITIAL_PLAYER: Player = {
   name: "新进召唤师",
@@ -79,6 +81,26 @@ export default function App() {
   const [lastSummonedPets, setLastSummonedPets] = useState<Pet[]>([]);
   const [selectedDifficulty, setSelectedDifficulty] = useState(player.currentStage || 1);
   const [selectedOffspringId, setSelectedOffspringId] = useState<string | null>(null);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [levelUpHeroId, setLevelUpHeroId] = useState<string | null>(null);
+
+  const determineRaceFromBloodlines = useCallback((bloodlines: Bloodline[]): Race => {
+    const pure = bloodlines.find(b => b.purity >= 100);
+    if (pure) return pure.race;
+    
+    const roll = Math.random() * 100;
+    let cumulative = 0;
+    for (const b of bloodlines) {
+      cumulative += b.purity;
+      if (roll <= cumulative) return b.race;
+    }
+    return bloodlines[0]?.race || Race.HUMAN;
+  }, []);
+
+  // Auto-save
+  useEffect(() => {
+    localStorage.setItem('mythic_summoner_player_v2', JSON.stringify(player));
+  }, [player]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -122,6 +144,7 @@ export default function App() {
               trainingCount: 0,
               motherId: p.id,
               fatherId: 'player',
+              isPrisonOrigin: true,
               parents: [p.id, 'player'],
               grandparents: p.bloodlines.map(b => b.race).slice(0, 2) // Simplified
             };
@@ -171,11 +194,15 @@ export default function App() {
     }));
   }, []);
 
-  const updateHeroAffection = useCallback((heroId: string, amount: number) => {
-    setPlayer(prev => ({
-      ...prev,
-      collection: prev.collection.map(h => h.id === heroId ? { ...h, affection: Math.min(1000, h.affection + amount) } : h)
-    }));
+   const updateHeroAffection = useCallback((heroId: string, amount: number) => {
+    setPlayer(prev => {
+      const update = (list: any[]) => list.map(h => h.id === heroId ? { ...h, affection: Math.max(-10000, Math.min(1000, h.affection + amount)) } : h);
+      return {
+        ...prev,
+        collection: update(prev.collection),
+        offsprings: update(prev.offsprings) as Offspring[]
+      };
+    });
   }, []);
 
   const updatePlayerStats = useCallback((updates: Partial<Player>) => {
@@ -215,11 +242,11 @@ export default function App() {
         if (Math.random() < 0.3) {
           const specialRace = Object.values(Race).filter(r => r !== Race.HUMAN)[Math.floor(Math.random() * 7)];
           const purity = Math.floor(Math.random() * 80) + 10;
-          race = purity > 50 ? specialRace : Race.HUMAN;
           bloodlines = [
             { race: specialRace, purity },
             { race: Race.HUMAN, purity: 100 - purity }
           ];
+          race = determineRaceFromBloodlines(bloodlines);
         }
       }
 
@@ -342,7 +369,7 @@ export default function App() {
       gender: genders[Math.floor(Math.random() * genders.length)],
       class: classes[Math.floor(Math.random() * classes.length)],
       rarity: rarity,
-      race: Race.HUMAN,
+      race: determineRaceFromBloodlines(bloodlines),
       bloodlines,
       will: 100,
       stats: { ...monster.stats },
@@ -355,25 +382,34 @@ export default function App() {
     }));
   }, []);
 
-  const handleHeroLevelUp = useCallback((heroId: string, expGain: number) => {
+  const handleHeroLevelUp = useCallback((heroId: string, levels: number) => {
     setPlayer(prev => {
+      const hero = [...prev.collection, ...prev.offsprings].find(h => h.id === heroId);
+      if (!hero) return prev;
+
+      let totalExpNeeded = 0;
+      let currentMaxExp = hero.maxExp;
+      let currentExp = hero.exp;
+      for (let i = 0; i < levels; i++) {
+        totalExpNeeded += Math.max(0, currentMaxExp - currentExp);
+        currentMaxExp = Math.floor(currentMaxExp * 1.1);
+        currentExp = 0;
+      }
+
+      if (prev.exp < totalExpNeeded) return prev;
+
       const updateList = (list: any[]) => list.map(h => {
         if (h.id !== heroId) return h;
         
-        let newExp = h.exp + expGain;
+        let newExp = h.exp;
         let newLevel = h.level;
         let newMaxExp = h.maxExp;
         let newStats = { ...h.stats };
         let isBreakthroughRequired = h.isBreakthroughRequired || false;
 
-        while (newExp >= newMaxExp && newLevel < 80 && !isBreakthroughRequired) {
-          // Check for breakthrough at 20, 40, 60
-          if ((newLevel === 20 || newLevel === 40 || newLevel === 60)) {
-            isBreakthroughRequired = true;
-            break;
-          }
-
-          newExp -= newMaxExp;
+        for (let i = 0; i < levels; i++) {
+          if (isBreakthroughRequired || newLevel >= 80) break;
+          
           newLevel++;
           newMaxExp = Math.floor(newMaxExp * 1.1);
           // Stats increase on level up - 1% increase
@@ -383,12 +419,16 @@ export default function App() {
           newStats.def = Math.floor(newStats.def * 1.01);
           newStats.spd = Math.floor(newStats.spd * 1.01) || newStats.spd + 1;
           newStats.skill = Math.floor(newStats.skill * 1.01);
+
+          if (newLevel % 20 === 0 && newLevel < 80) {
+            isBreakthroughRequired = true;
+          }
         }
 
         return {
           ...h,
           level: newLevel,
-          exp: newExp,
+          exp: 0, // Reset exp after manual level up for simplicity or handle overflow
           maxExp: newMaxExp,
           stats: newStats,
           isBreakthroughRequired,
@@ -398,6 +438,35 @@ export default function App() {
 
       return { 
         ...prev, 
+        exp: prev.exp - totalExpNeeded,
+        collection: updateList(prev.collection),
+        offsprings: updateList(prev.offsprings)
+      };
+    });
+  }, []);
+
+  const handleBreakthrough = useCallback((heroId: string) => {
+    setPlayer(prev => {
+      const hero = [...prev.collection, ...prev.offsprings].find(h => h.id === heroId);
+      if (!hero || !hero.isBreakthroughRequired) return prev;
+
+      const RARITY_INDEX: Record<Rarity, number> = {
+        [Rarity.C]: 0, [Rarity.B]: 1, [Rarity.A]: 2, [Rarity.S]: 3, [Rarity.SS]: 4, [Rarity.SSS]: 5,
+      };
+      const levelTier = Math.floor(hero.level / 20);
+      const rarityIndex = RARITY_INDEX[hero.rarity];
+      const cost = (levelTier * 5) + (rarityIndex * 5);
+
+      if (prev.gems < cost) {
+        alert('钻石不足！');
+        return prev;
+      }
+
+      const updateList = (list: any[]) => list.map(h => h.id === heroId ? { ...h, isBreakthroughRequired: false } : h);
+
+      return {
+        ...prev,
+        gems: prev.gems - cost,
         collection: updateList(prev.collection),
         offsprings: updateList(prev.offsprings)
       };
@@ -405,37 +474,8 @@ export default function App() {
   }, []);
 
   const handleManualLevelUp = useCallback((heroId: string) => {
-    setPlayer(prev => {
-      const hero = [...prev.collection, ...prev.offsprings].find(h => h.id === heroId);
-      if (!hero || hero.level >= 80) return prev;
-      
-      // Breakthrough check
-      if (hero.isBreakthroughRequired) {
-        const cost = hero.level * 100;
-        if (prev.gold < cost) return prev;
-        
-        const updateList = (list: any[]) => list.map(h => h.id === heroId ? { ...h, isBreakthroughRequired: false } : h);
-        
-        const nextState = {
-          ...prev,
-          gold: prev.gold - cost,
-          collection: updateList(prev.collection),
-          offsprings: updateList(prev.offsprings)
-        };
-        
-        // Trigger level up check again after breakthrough
-        setTimeout(() => handleHeroLevelUp(heroId, 0), 0);
-        return nextState;
-      }
-
-      // Use player EXP to level up hero? Or just check if they have enough hero EXP
-      // The request says "角色点击的等级可以升级", usually this means spending a resource.
-      // I'll implement it as: if they have enough EXP, level up. If not, maybe spend player EXP?
-      // Let's assume it's just a manual trigger for the level up check if it got stuck or for breakthrough.
-      handleHeroLevelUp(heroId, 0);
-      return prev;
-    });
-  }, [handleHeroLevelUp]);
+    setLevelUpHeroId(heroId);
+  }, []);
 
   const handleExportData = useCallback(() => {
     const data = JSON.stringify(player);
@@ -563,28 +603,15 @@ export default function App() {
         combined[b.race] = (combined[b.race] || 0) + b.purity / 2;
       });
       let bloodlines = Object.entries(combined).map(([race, purity]) => ({ race: race as Race, purity }));
-      const maxPurity = Math.max(...bloodlines.map(r => r.purity));
-      const mainRace = bloodlines.find(r => r.purity === maxPurity)?.race;
-      if (mainRace) {
-        let assimilatedPurity = 0;
-        bloodlines = bloodlines.filter(r => {
-          if (r.race !== mainRace && r.purity < 0.01) {
-            assimilatedPurity += r.purity;
-            return false;
-          }
-          return true;
-        });
-        const mainIdx = bloodlines.findIndex(r => r.race === mainRace);
-        bloodlines[mainIdx].purity += assimilatedPurity;
-      }
-
+      const mainRace = determineRaceFromBloodlines(bloodlines);
+      
       const offspring: Offspring = {
         id: Math.random().toString(36).substr(2, 9),
         name: `${hero.name}之子`,
         rarity,
         class: hero.class,
         gender: Math.random() > 0.5 ? Gender.MALE : Gender.FEMALE,
-        race: mainRace || Race.HUMAN,
+        race: mainRace,
         bloodlines,
         level: 1,
         exp: 0,
@@ -719,7 +746,7 @@ export default function App() {
       rarity: prisoner.rarity,
       class: prisoner.class,
       gender: prisoner.gender,
-      race: prisoner.race,
+      race: determineRaceFromBloodlines(prisoner.bloodlines),
       bloodlines: prisoner.bloodlines,
       level: 1,
       exp: 0,
@@ -837,15 +864,56 @@ export default function App() {
     setPlayer(prev => {
       if (prev.gems < 50) return prev;
       
+      const prisoner = prev.prisoners.find(p => p.id === id);
+      if (!prisoner || !prisoner.isPregnant) return prev;
+
+      // Immediate generation
+      const weights: Record<Rarity, number> = {
+        [Rarity.C]: 1, [Rarity.B]: 2, [Rarity.A]: 5, [Rarity.S]: 15, [Rarity.SS]: 40, [Rarity.SSS]: 100,
+      };
+      const parentWeight = weights[prisoner.rarity];
+      const roll = Math.random();
+      let rarity = Rarity.C;
+      if (roll < parentWeight / 1000) rarity = Rarity.SSS;
+      else if (roll < parentWeight / 200) rarity = Rarity.SS;
+      else if (roll < parentWeight / 50) rarity = Rarity.S;
+      else if (roll < parentWeight / 20) rarity = Rarity.A;
+      else if (roll < parentWeight / 5) rarity = Rarity.B;
+
+      const offspring: Offspring = {
+        id: Math.random().toString(36).substr(2, 9),
+        name: `${prisoner.name}之子`,
+        rarity,
+        class: prisoner.class,
+        gender: Math.random() > 0.5 ? Gender.MALE : Gender.FEMALE,
+        race: prisoner.race,
+        bloodlines: prisoner.bloodlines,
+        level: 1,
+        exp: 0,
+        maxExp: 100,
+        stats: { hp: 100, maxHp: 100, atk: 20, def: 10, spd: 10, skill: 10 },
+        description: "在囚牢中诞下的后代。",
+        rating: Math.floor(Math.random() * 50) + 50,
+        affection: 30,
+        isAdult: false,
+        trainingCount: 0,
+        motherId: prisoner.id,
+        fatherId: 'player',
+        isPrisonOrigin: true,
+        parents: [prisoner.id, 'player'],
+        grandparents: prisoner.bloodlines.map(b => b.race).slice(0, 2)
+      };
+
       const prisoners = prev.prisoners.map(p => {
-        if (p.id !== id || !p.isPregnant) return p;
-        return { ...p, pregnancyEndTime: Date.now() }; // Set to now so the interval picks it up
+        if (p.id !== id) return p;
+        return { ...p, isPregnant: false, pregnancyEndTime: undefined };
       });
 
       return {
         ...prev,
         gems: prev.gems - 50,
-        prisoners
+        prisoners,
+        offsprings: [...prev.offsprings, offspring]
       };
     });
   }, []);
@@ -855,6 +923,10 @@ export default function App() {
       const list = type === 'hero' ? prev.collection : prev.offsprings;
       const target = list.find(x => x.id === id);
       if (!target) return prev;
+      if (target.isLocked) {
+        alert('该角色已锁定，无法关入囚笼！');
+        return prev;
+      }
 
       const newPrisoner: Prisoner = {
         id: target.id,
@@ -866,11 +938,12 @@ export default function App() {
         bloodlines: target.bloodlines,
         will: 100,
         stats: { ...target.stats },
-        affection: Math.max(0, target.affection - 50)
+        affection: Math.max(-10000, target.affection - 50)
       };
 
       return {
         ...prev,
+        activeHeroId: prev.activeHeroId === id ? null : prev.activeHeroId,
         collection: prev.collection.filter(h => h.id !== id),
         offsprings: prev.offsprings.filter(o => o.id !== id),
         prisoners: [...prev.prisoners, newPrisoner]
@@ -932,24 +1005,26 @@ export default function App() {
           clearedEliteStages
         };
       });
-      if (player.activeHeroId) handleHeroLevelUp(player.activeHeroId, rewards.exp);
       handleCapture(monster, monster.type === MonsterType.BOSS);
     } else {
       if (monster.type === MonsterType.ELITE || monster.type === MonsterType.BOSS) {
         setPlayer(prev => ({ ...prev, currentSubStage: 1 }));
       }
-      setGameState(GameState.LOBBY);
     }
-  }, [player.activeHeroId, handleHeroLevelUp, handleCapture]);
+  }, [handleCapture]);
 
-  const handleSweep = useCallback((difficulty: number) => {
+  const handleRetryBattle = useCallback(() => {
+    setGameState(GameState.BATTLE);
+  }, []);
+
+  const handleSweep = useCallback(() => {
     setPlayer(prev => {
       let totalGold = 0;
       let totalGems = 0;
       let totalExp = 0;
 
-      for (let i = 1; i <= 10; i++) {
-        const m = generateMonster(difficulty, i);
+      const m = generateMonster(prev.currentStage, prev.currentSubStage);
+      for (let i = 0; i < 10; i++) {
         totalGold += m.rewards.gold;
         totalGems += m.rewards.gems;
         totalExp += m.rewards.exp;
@@ -962,6 +1037,7 @@ export default function App() {
         exp: prev.exp + totalExp
       };
     });
+    alert('扫荡完成！获得了大量奖励。');
   }, []);
 
   const handleEquipPet = useCallback((heroId: string, petId: string | null) => {
@@ -971,7 +1047,7 @@ export default function App() {
     }));
   }, []);
 
-  const activeHero = player.collection.find(h => h.id === player.activeHeroId) || null;
+  const activeHero = player.collection.find(h => h.id === player.activeHeroId) || player.offsprings.find(o => o.id === player.activeHeroId) || null;
   const activePet = player.petCollection.find(p => p.id === player.activePetId) || null;
 
   return (
@@ -1008,26 +1084,12 @@ export default function App() {
         </div>
 
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1 mr-2 px-2 py-1 bg-white/5 rounded-lg border border-white/10">
-            <button 
-              onClick={handleExportData}
-              title="导出存档"
-              className="p-1.5 hover:bg-white/10 rounded transition-colors text-white/60 hover:text-white"
-            >
-              <Save className="w-3.5 h-3.5" />
-            </button>
-            <label className="p-1.5 hover:bg-white/10 rounded transition-colors text-white/60 hover:text-white cursor-pointer">
-              <Upload className="w-3.5 h-3.5" />
-              <input type="file" className="hidden" onChange={handleImportData} accept=".json" />
-            </label>
-            <button 
-              onClick={handleClearData}
-              title="清除存档"
-              className="p-1.5 hover:bg-red-500/20 rounded transition-colors text-red-500/60 hover:text-red-500"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          <button 
+            onClick={() => setIsSettingsOpen(true)}
+            className="p-2 hover:bg-white/10 rounded-full transition-colors text-white/60 hover:text-white"
+          >
+            <Settings className="w-5 h-5" />
+          </button>
           {gameState !== GameState.LOBBY && gameState !== GameState.GENDER_SELECT && (
             <button 
               onClick={() => setGameState(GameState.LOBBY)}
@@ -1079,8 +1141,8 @@ export default function App() {
               onSelectDifficulty={setSelectedDifficulty}
               onNavigate={setGameState}
               onRenameHero={renameHero}
-              onSweep={handleSweep}
               onManualLevelUp={handleManualLevelUp}
+              onOpenSettings={() => setIsSettingsOpen(true)}
             />
           )}
           {gameState === GameState.GACHA && (
@@ -1107,6 +1169,9 @@ export default function App() {
               difficulty={player.currentStage}
               subStage={player.currentSubStage}
               onBattleEnd={handleBattleEnd}
+              onRetry={handleRetryBattle}
+              onExit={() => setGameState(GameState.LOBBY)}
+              onSweep={handleSweep}
             />
           )}
           {gameState === GameState.COLLECTION && (
@@ -1125,6 +1190,7 @@ export default function App() {
               onToggleLock={handleToggleLock}
               onTogglePin={handleTogglePin}
               onBulkExecute={handleBulkExecute}
+              onImprison={handleSendToPrison}
             />
           )}
           {gameState === GameState.PRISON && (
@@ -1178,6 +1244,26 @@ export default function App() {
           )}
         </AnimatePresence>
       </main>
+
+      <AnimatePresence>
+        {isSettingsOpen && (
+          <SettingsModal 
+            onClose={() => setIsSettingsOpen(false)}
+            onExport={handleExportData}
+            onImport={handleImportData}
+            onClear={handleClearData}
+          />
+        )}
+        {levelUpHeroId && (
+          <LevelUpModal 
+            hero={[...player.collection, ...player.offsprings].find(h => h.id === levelUpHeroId)!}
+            player={player}
+            onClose={() => setLevelUpHeroId(null)}
+            onLevelUp={handleHeroLevelUp}
+            onBreakthrough={handleBreakthrough}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Mobile Stats Bar */}
       <div className="fixed bottom-0 left-0 right-0 sm:hidden bg-black/80 backdrop-blur-md border-t border-white/10 px-6 py-3 flex justify-around items-center z-50">

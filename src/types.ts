@@ -23,7 +23,8 @@ export enum BodyPart {
   CHEST = '胸口',
   VAGINA = '小穴',
   CLITORIS = '阴蒂',
-  ANUS = '屁眼'
+  ANUS = '屁眼',
+  PENIS = '肉棒'
 }
 
 export enum Rarity {
@@ -110,6 +111,7 @@ export interface Offspring extends Hero {
   trainingCount: number;
   motherId: string;
   fatherId?: string;
+  isPrisonOrigin?: boolean;
 }
 
 export interface InventoryItem {

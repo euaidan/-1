@@ -15,8 +15,8 @@ interface LobbyProps {
   onSelectDifficulty: (difficulty: number) => void;
   onNavigate: (state: GameState) => void;
   onRenameHero: (id: string, name: string) => void;
-  onSweep: (difficulty: number) => void;
   onManualLevelUp: (id: string) => void;
+  onOpenSettings: () => void;
 }
 
 const RARITY_COLORS = {
@@ -46,8 +46,8 @@ export default function Lobby({
   onSelectDifficulty,
   onNavigate, 
   onRenameHero,
-  onSweep,
-  onManualLevelUp
+  onManualLevelUp,
+  onOpenSettings
 }: LobbyProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(activeHero?.name || '');
@@ -125,7 +125,7 @@ export default function Lobby({
                             : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/40"
                         )}
                       >
-                        {activeHero.isBreakthroughRequired ? `突破 (需${activeHero.level * 100}金币)` : `LV.${activeHero.level}`}
+                        {activeHero.isBreakthroughRequired ? `突破` : `LV.${activeHero.level}`}
                       </button>
                       <div className="w-24 sm:w-32 h-1.5 bg-white/10 rounded-full overflow-hidden border border-white/5">
                         <motion.div 
@@ -207,12 +207,6 @@ export default function Lobby({
             onChange={(e) => onSelectDifficulty(parseInt(e.target.value))}
             className="w-full mt-3 accent-emerald-500"
           />
-          <button 
-            onClick={() => onSweep(selectedDifficulty)}
-            className="w-full mt-3 py-2 bg-yellow-500/20 hover:bg-yellow-500/30 text-yellow-500 border border-yellow-500/30 rounded-xl text-xs font-bold transition-all"
-          >
-            扫荡普通关卡 (1-10)
-          </button>
         </div>
 
         <div className="grid grid-cols-2 gap-2">

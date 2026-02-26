@@ -17,6 +17,7 @@ interface CollectionProps {
   onToggleLock: (id: string, type: 'hero' | 'offspring' | 'prisoner') => void;
   onTogglePin: (id: string, type: 'hero' | 'offspring') => void;
   onBulkExecute: (rarities: Rarity[]) => void;
+  onImprison: (id: string, type: 'hero' | 'offspring') => void;
 }
 
 const RARITY_COLORS = {
@@ -47,7 +48,8 @@ export default function Collection({
   onChangePlayerBloodline,
   onToggleLock,
   onTogglePin,
-  onBulkExecute
+  onBulkExecute,
+  onImprison
 }: CollectionProps) {
   const [tab, setTab] = useState<'heroes' | 'pets' | 'offsprings'>('heroes');
   const [sortBy, setSortBy] = useState<'rating' | 'level'>('rating');
@@ -178,6 +180,7 @@ export default function Collection({
                 onEquipPet={(petId) => onEquipPet(hero.id, petId)}
                 onToggleLock={() => onToggleLock(hero.id, 'hero')}
                 onTogglePin={() => onTogglePin(hero.id, 'hero')}
+                onImprison={() => onImprison(hero.id, 'hero')}
               />
             ))}
             
@@ -220,6 +223,7 @@ export default function Collection({
                 onToggleLock={() => onToggleLock(offspring.id, 'offspring')}
                 onTogglePin={() => onTogglePin(offspring.id, 'offspring')}
                 onRename={(name) => onRenameHero(offspring.id, name)}
+                onImprison={() => onImprison(offspring.id, 'offspring')}
               />
             ))}
             
@@ -334,7 +338,7 @@ function PetCard({ pet, isActive, onClick, onRename }: { pet: Pet, isActive: boo
   );
 }
 
-function HeroCard({ hero, isActive, pets, onClick, onRename, onEquipPet, onToggleLock, onTogglePin }: { 
+function HeroCard({ hero, isActive, pets, onClick, onRename, onEquipPet, onToggleLock, onTogglePin, onImprison }: { 
   hero: Hero, 
   isActive: boolean, 
   pets: Pet[],
@@ -342,7 +346,8 @@ function HeroCard({ hero, isActive, pets, onClick, onRename, onEquipPet, onToggl
   onRename: (name: string) => void,
   onEquipPet: (petId: string | null) => void,
   onToggleLock: () => void,
-  onTogglePin: () => void
+  onTogglePin: () => void,
+  onImprison: () => void
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempName, setTempName] = useState(hero.name);
@@ -380,6 +385,13 @@ function HeroCard({ hero, isActive, pets, onClick, onRename, onEquipPet, onToggl
               {RARITY_LABELS[hero.rarity]} | {hero.race}
             </div>
             <div className="flex gap-1">
+              <button 
+                onClick={(e) => { e.stopPropagation(); onImprison(); }}
+                title="关入囚笼"
+                className="p-1 rounded transition-colors text-white/20 hover:bg-red-500/20 hover:text-red-400"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
               <button 
                 onClick={(e) => { e.stopPropagation(); onTogglePin(); }}
                 className={cn("p-1 rounded transition-colors", hero.isPinned ? "text-yellow-400 bg-yellow-400/10" : "text-white/20 hover:bg-white/10")}
@@ -449,7 +461,9 @@ function HeroCard({ hero, isActive, pets, onClick, onRename, onEquipPet, onToggl
 
           <div className="flex items-center justify-between mt-1">
             <span className="text-[10px] text-white/40">评分: {hero.rating}</span>
-            <span className="text-[10px] text-white/40">好感: {hero.affection}</span>
+            <span className={cn("text-[10px]", hero.affection < 0 ? "text-red-400" : "text-white/40")}>
+              好感: {hero.affection}
+            </span>
           </div>
         </div>
       </div>
@@ -514,7 +528,7 @@ function HeroCard({ hero, isActive, pets, onClick, onRename, onEquipPet, onToggl
   );
 }
 
-function OffspringCard({ offspring, isActive, onSelect, onTrain, onChangeBloodline, onToggleLock, onTogglePin, onRename }: { 
+function OffspringCard({ offspring, isActive, onSelect, onTrain, onChangeBloodline, onToggleLock, onTogglePin, onRename, onImprison }: { 
   offspring: Offspring, 
   isActive: boolean,
   onSelect: () => void,
@@ -522,7 +536,8 @@ function OffspringCard({ offspring, isActive, onSelect, onTrain, onChangeBloodli
   onChangeBloodline: () => void,
   onToggleLock: () => void,
   onTogglePin: () => void,
-  onRename: (name: string) => void
+  onRename: (name: string) => void,
+  onImprison: () => void
 }) {
   const [isEditing, setIsEditing] = useState(false);
   const [tempName, setTempName] = useState(offspring.name);
@@ -543,6 +558,13 @@ function OffspringCard({ offspring, isActive, onSelect, onTrain, onChangeBloodli
               {RARITY_LABELS[offspring.rarity]} | {offspring.race}
             </div>
             <div className="flex gap-1">
+              <button 
+                onClick={(e) => { e.stopPropagation(); onImprison(); }}
+                title="关入囚笼"
+                className="p-1 rounded transition-colors text-white/20 hover:bg-red-500/20 hover:text-red-400"
+              >
+                <Trash2 className="w-3 h-3" />
+              </button>
               <button 
                 onClick={(e) => { e.stopPropagation(); onTogglePin(); }}
                 className={cn("p-1 rounded transition-colors", offspring.isPinned ? "text-yellow-400 bg-yellow-400/10" : "text-white/20 hover:bg-white/10")}
@@ -571,6 +593,11 @@ function OffspringCard({ offspring, isActive, onSelect, onTrain, onChangeBloodli
           ) : (
             <div className="flex items-center gap-1.5 group/name mt-0.5">
               <h3 className="text-base font-bold text-white truncate">{offspring.name}</h3>
+              {offspring.isPrisonOrigin && (
+                <span className="px-1.5 py-0.5 bg-red-500/20 text-red-400 border border-red-500/30 rounded text-[8px] font-bold">
+                  囚
+                </span>
+              )}
               <button 
                 onClick={() => setIsEditing(true)}
                 className="opacity-0 group-hover/name:opacity-100 p-1 hover:bg-white/10 rounded transition-all"

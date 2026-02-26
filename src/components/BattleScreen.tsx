@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Stage, Layer, Rect, Text, Image as KonvaImage, Group } from 'react-konva';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sword, Shield, Zap, Heart, AlertCircle, MessageSquareQuote, FastForward, Play, Pause, SkipForward } from 'lucide-react';
+import { Sword, Shield, Zap, Heart, AlertCircle, MessageSquareQuote, FastForward, Play, Pause, SkipForward, ChevronLeft } from 'lucide-react';
 import { Hero, Monster, Stats, MonsterType, Rarity } from '../types';
 import { generateMonster } from '../constants';
 import { cn } from '../lib/utils';
@@ -12,6 +12,9 @@ interface BattleScreenProps {
   difficulty: number;
   subStage: number;
   onBattleEnd: (won: boolean, rewards: { gold: number, gems: number, exp: number }, monster: Monster) => void;
+  onRetry: () => void;
+  onExit: () => void;
+  onSweep: () => void;
 }
 
 interface BattleState {
@@ -24,7 +27,7 @@ interface BattleState {
   commentary: string;
 }
 
-export default function BattleScreen({ hero, difficulty, subStage, onBattleEnd }: BattleScreenProps) {
+export default function BattleScreen({ hero, difficulty, subStage, onBattleEnd, onRetry, onExit, onSweep }: BattleScreenProps) {
   const [monster] = useState(() => generateMonster(difficulty, subStage));
   const [battleState, setBattleState] = useState<BattleState>({
     heroHp: hero.stats.hp,
@@ -67,10 +70,9 @@ export default function BattleScreen({ hero, difficulty, subStage, onBattleEnd }
       commentary: won ? "一场属于英雄的辉煌胜利！" : "黑暗暂时笼罩了大地..."
     }));
 
-    setTimeout(() => {
-      onBattleEnd(won, won ? monster.rewards : { gold: 0, gems: 0, exp: 0 }, monster);
-    }, 3000 / speed);
-  }, [monster, onBattleEnd, speed]);
+    // Don't auto-exit anymore, wait for user action
+    onBattleEnd(won, won ? monster.rewards : { gold: 0, gems: 0, exp: 0 }, monster);
+  }, [monster, onBattleEnd]);
 
   const executeMonsterTurn = useCallback(() => {
     if (battleState.isFinished) return;
@@ -143,9 +145,7 @@ export default function BattleScreen({ hero, difficulty, subStage, onBattleEnd }
       commentary: won ? "快速解决战斗！" : "在混乱中落败..."
     }));
 
-    setTimeout(() => {
-      onBattleEnd(won, won ? monster.rewards : { gold: 0, gems: 0, exp: 0 }, monster);
-    }, 1000);
+    onBattleEnd(won, won ? monster.rewards : { gold: 0, gems: 0, exp: 0 }, monster);
   };
 
   // Auto-battle logic
@@ -314,12 +314,40 @@ export default function BattleScreen({ hero, difficulty, subStage, onBattleEnd }
                 </div>
 
                 {battleState.won && (
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-3 gap-2 mb-8">
                     <RewardBox label="金币" value={monster.rewards.gold} color="text-yellow-400" />
                     <RewardBox label="钻石" value={monster.rewards.gems} color="text-cyan-400" />
                     <RewardBox label="经验" value={monster.rewards.exp} color="text-emerald-400" />
                   </div>
                 )}
+
+                <div className="flex flex-col gap-3">
+                  {battleState.won && (
+                    <button
+                      onClick={() => onSweep()}
+                      className="w-full py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+                    >
+                      <FastForward className="w-4 h-4" />
+                      扫荡本关 (10次)
+                    </button>
+                  )}
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={onRetry}
+                      className="py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+                    >
+                      <Play className="w-4 h-4" />
+                      重新来过
+                    </button>
+                    <button
+                      onClick={onExit}
+                      className="py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      退出战斗
+                    </button>
+                  </div>
+                </div>
               </div>
             </motion.div>
           )}

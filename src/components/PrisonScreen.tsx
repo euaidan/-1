@@ -59,18 +59,24 @@ export default function PrisonScreen({
     const reactions = {
       wax: [
         "滚烫的蜡油滴在皮肤上，囚犯发出痛苦的呻吟，意志开始动摇。",
-        "灼热的痛楚让囚犯浑身颤抖，眼神中充满了恐惧。",
-        "每一滴蜡油都像是烙印，囚犯的自尊在高温下逐渐融化。"
+        "灼热的痛楚让囚犯浑身颤暴力地抖，眼神中充满了恐惧。",
+        "每一滴蜡油都像是烙印，囚犯的自尊在高温下逐渐融化。",
+        "你将蜡油滴在囚犯最敏感的部位，看着他因为剧痛而扭曲的面孔，心中充满了快感。",
+        "滚烫的液体顺着皮肤流淌，囚犯的呼吸变得急促，眼神中流露出绝望。"
       ],
       whip: [
         "皮鞭划破空气的声音伴随着惨叫，囚犯的背部留下了触目惊心的红痕。",
         "严酷的鞭刑让囚犯几乎昏厥，身体的痛苦远超意志的负荷。",
-        "在不断的抽打下，囚犯终于低下了高傲的头颅。"
+        "在不断的抽打下，囚犯终于低下了高傲的头颅。",
+        "每一鞭都带起一片血花，囚犯的求饶声在空旷的囚室中回荡。",
+        "你无情地挥动长鞭，直到囚犯的身体不再颤抖，只剩下微弱的喘息。"
       ],
       toy: [
         "极尽羞辱的玩弄让囚犯感到无地自容，精神防线彻底崩溃。",
         "这种玩弄比肉体的痛苦更让他难以忍受，羞耻感吞噬了他的理智。",
-        "在你的嘲弄与玩弄下，囚犯的眼神变得空洞而绝望。"
+        "在你的嘲弄与玩弄下，囚犯的眼神变得空洞而绝望。",
+        "你用各种器具羞辱着他的尊严，看着他从愤怒到绝望，最后只剩下空洞的顺从。",
+        "这种精神上的折磨让他彻底丧失了反抗的意志，成为了你手中的玩物。"
       ]
     };
     
@@ -119,11 +125,11 @@ export default function PrisonScreen({
         {/* Prisoner List */}
         <div className="w-full lg:w-48 bg-zinc-900/50 rounded-2xl border border-white/10 overflow-y-auto p-2 flex flex-row lg:flex-col gap-1.5 min-h-[90px] lg:min-h-0">
           {player.prisoners?.map(p => (
-            <button
+            <div
               key={p.id}
               onClick={() => setSelectedId(p.id)}
               className={cn(
-                "p-3 lg:p-4 rounded-2xl border transition-all text-left min-w-[140px] lg:min-w-0 relative",
+                "p-3 lg:p-4 rounded-2xl border transition-all text-left min-w-[140px] lg:min-w-0 relative cursor-pointer",
                 selectedId === p.id 
                   ? "bg-red-500/20 border-red-500/50" 
                   : "bg-white/5 border-white/10 hover:bg-white/10"
@@ -140,7 +146,7 @@ export default function PrisonScreen({
                   <Baby className="w-3 h-3 text-pink-400 animate-pulse" />
                 </button>
               )}
-            </button>
+            </div>
           ))}
           {(!player.prisoners || player.prisoners.length === 0) && (
             <div className="h-full w-full flex flex-col items-center justify-center text-white/20 text-center p-4">
@@ -299,7 +305,14 @@ export default function PrisonScreen({
               <div className="grid grid-cols-2 gap-3 mb-6">
                 {Object.values(BodyPart).map(part => {
                   const isFemaleOnly = part === BodyPart.VAGINA || part === BodyPart.CLITORIS;
-                  const canSelect = !isFemaleOnly || (selected.gender === Gender.FEMALE || selected.gender === Gender.NON_BINARY);
+                  const isMaleOnly = part === BodyPart.PENIS;
+                  
+                  let canSelect = true;
+                  if (isFemaleOnly) {
+                    canSelect = selected.gender === Gender.FEMALE || selected.gender === Gender.NON_BINARY;
+                  } else if (isMaleOnly) {
+                    canSelect = selected.gender === Gender.MALE || selected.gender === Gender.NON_BINARY;
+                  }
                   
                   return (
                     <button

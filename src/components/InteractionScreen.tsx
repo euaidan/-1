@@ -103,8 +103,10 @@ export default function InteractionScreen({
           <div className="flex items-end justify-between">
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <Heart className="w-4 h-4 text-red-500 fill-red-500" />
-                <span className="text-lg font-bold">好感度: {activeHero.affection}</span>
+                <Heart className={cn("w-4 h-4", activeHero.affection < 0 ? "text-red-600 fill-red-600" : "text-red-500 fill-red-500")} />
+                <span className={cn("text-lg font-bold", activeHero.affection < 0 ? "text-red-400" : "text-white")}>
+                  好感度: {activeHero.affection}
+                </span>
               </div>
               <div className="flex items-center gap-3 mb-2">
                 <h2 className="text-2xl font-bold">{activeHero.name}</h2>
@@ -118,7 +120,7 @@ export default function InteractionScreen({
                       : "bg-emerald-500/20 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/40"
                   )}
                 >
-                  {activeHero.isBreakthroughRequired ? `突破 (需${activeHero.level * 100}金币)` : `LV.${activeHero.level}`}
+                  {activeHero.isBreakthroughRequired ? `突破` : `LV.${activeHero.level}`}
                 </button>
               </div>
               <p className="text-white/60 text-xs">{activeHero.class} | {activeHero.gender}</p>
