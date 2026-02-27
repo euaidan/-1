@@ -244,7 +244,6 @@ export default function App() {
         race = targetRace;
         bloodlines = [{ race: targetRace, purity: 100 }];
         newSpPityCount = 0;
-        newPityCount = 0; // Reset SSS pity too when getting SP
       } else if (rarityRoll < 0.005 || newPityCount >= 100) {
         rarity = Rarity.SSS;
         race = targetRace;
