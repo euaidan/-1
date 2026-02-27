@@ -1,12 +1,16 @@
-import tailwindcss from '@tailwindcss/vite';
+import tailwind from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig, loadEnv} from 'vite';
+import { defineConfig, loadEnv } from 'vite';
 
-export default defineConfig(({mode}) => {
+export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
+  
   return {
-    plugins: [react(), tailwindcss()],
+    // 关键：添加base配置，仓库名是"-1"
+    base: '/-1/',
+    
+    plugins: [react(), tailwind()],
     define: {
       'process.env.GEMINI_API_KEY': JSON.stringify(env.GEMINI_API_KEY),
     },
@@ -16,8 +20,8 @@ export default defineConfig(({mode}) => {
       },
     },
     server: {
-      // HMR is disabled in AI Studio via DISABLE_HMR env var.
-      // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
+      // 在 AI Studio 中，通过 DISABLE_HMR 环境变量禁用 HMR。
+      // 请勿修改—文件监视功能已禁用，以防止代理编辑期间出现闪烁。
       hmr: process.env.DISABLE_HMR !== 'true',
     },
   };
