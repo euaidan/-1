@@ -1,15 +1,16 @@
 import React from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { X, Save, Upload, Trash2, Settings, ShieldAlert } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { X, Save, Upload, Trash2, Settings, ShieldAlert, Database } from 'lucide-react';
 
 interface SettingsModalProps {
   onClose: () => void;
   onExport: () => void;
+  onExportHtml: () => void;
   onImport: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onClear: () => void;
 }
 
-export default function SettingsModal({ onClose, onExport, onImport, onClear }: SettingsModalProps) {
+export default function SettingsModal({ onClose, onExport, onExportHtml, onImport, onClear }: SettingsModalProps) {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -43,8 +44,21 @@ export default function SettingsModal({ onClose, onExport, onImport, onClear }: 
             <div className="flex items-center gap-3">
               <Save className="w-5 h-5 text-emerald-400" />
               <div className="text-left">
-                <div className="font-bold">导出存档</div>
-                <div className="text-[10px] text-white/40">将当前进度保存为文件</div>
+                <div className="font-bold">导出存档 (JSON)</div>
+                <div className="text-[10px] text-white/40">将当前进度保存为 JSON 文件</div>
+              </div>
+            </div>
+          </button>
+
+          <button
+            onClick={onExportHtml}
+            className="w-full flex items-center justify-between p-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all group"
+          >
+            <div className="flex items-center gap-3">
+              <Database className="w-5 h-5 text-orange-400" />
+              <div className="text-left">
+                <div className="font-bold">导出存档 (HTML)</div>
+                <div className="text-[10px] text-white/40">将当前进度保存为网页文件</div>
               </div>
             </div>
           </button>

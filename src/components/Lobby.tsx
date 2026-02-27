@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { motion } from 'motion/react';
-import { Sword, Sparkles, Users, Play, Shield, Zap, Heart, Edit2, Check, X, Skull, ShoppingBag } from 'lucide-react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Sword, Sparkles, Users, Play, Shield, Zap, Heart, Edit2, Check, X, Skull, ShoppingBag, ChevronRight, Lock, Gift, Book } from 'lucide-react';
 import { GameState, Player, Hero, Rarity, Pet } from '../types';
 import { cn } from '../lib/utils';
 import PetWidget from './PetWidget';
@@ -10,13 +10,12 @@ interface LobbyProps {
   player: Player;
   activeHero: Hero | null;
   activePet: Pet | null;
-  currentDifficulty: number;
-  selectedDifficulty: number;
-  onSelectDifficulty: (difficulty: number) => void;
   onNavigate: (state: GameState) => void;
   onRenameHero: (id: string, name: string) => void;
   onManualLevelUp: (id: string) => void;
   onOpenSettings: () => void;
+  onSelectStage: (chapter: number, level: number) => void;
+  onClaimChapterReward: (chapter: number) => void;
 }
 
 const RARITY_COLORS = {
@@ -41,16 +40,17 @@ export default function Lobby({
   player, 
   activeHero, 
   activePet, 
-  currentDifficulty,
-  selectedDifficulty,
-  onSelectDifficulty,
   onNavigate, 
   onRenameHero,
   onManualLevelUp,
-  onOpenSettings
+  onOpenSettings,
+  onSelectStage,
+  onClaimChapterReward
 }: LobbyProps) {
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState(activeHero?.name || '');
+  const [isLevelSelectOpen, setIsLevelSelectOpen] = useState(false);
+  const [selectedChapter, setSelectedChapter] = useState(player.unlockedChapter);
 
   const handleRename = () => {
     if (activeHero && newName.trim()) {
@@ -117,7 +117,7 @@ export default function Lobby({
                     <div className="flex items-center gap-2">
                       <button 
                         onClick={() => onManualLevelUp(activeHero.id)}
-                        disabled={activeHero.level >= 80}
+                        disabled={activeHero.level >= 100}
                         className={cn(
                           "px-2 py-0.5 border rounded text-[10px] font-bold transition-all",
                           activeHero.isBreakthroughRequired 
@@ -178,43 +178,12 @@ export default function Lobby({
 
       {/* Right Side: Navigation */}
       <div className="w-full md:w-80 flex flex-col gap-2 overflow-y-auto pr-2">
-        {/* Stage Selector */}
-        <div className="bg-zinc-900 border border-white/10 rounded-2xl p-3 mb-2">
-          <div className="text-[10px] text-white/40 font-mono uppercase mb-2">难度选择</div>
-          <div className="flex items-center justify-between gap-2">
-            <button 
-              onClick={() => onSelectDifficulty(Math.max(1, selectedDifficulty - 1))}
-              className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10"
-            >
-              <X className="w-4 h-4 rotate-45" />
-            </button>
-            <div className="flex-1 text-center">
-              <div className="text-lg font-bold font-mono">难度 {selectedDifficulty}</div>
-              <div className="text-[9px] text-white/40">当前进度: {player.currentSubStage}/11</div>
-            </div>
-            <button 
-              onClick={() => onSelectDifficulty(Math.min(currentDifficulty, selectedDifficulty + 1))}
-              className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10"
-            >
-              <Play className="w-4 h-4" />
-            </button>
-          </div>
-          <input 
-            type="range" 
-            min="1" 
-            max={currentDifficulty} 
-            value={selectedDifficulty} 
-            onChange={(e) => onSelectDifficulty(parseInt(e.target.value))}
-            className="w-full mt-3 accent-emerald-500"
-          />
-        </div>
-
         <div className="grid grid-cols-2 gap-2">
           <NavButton 
             icon={<Play className="w-6 h-6" />}
             title="战斗"
-            description={isBreeding ? "孕育中不可战斗" : `挑战关卡 ${player.currentSubStage}`}
-            onClick={() => activeHero && !isBreeding && onNavigate(GameState.BATTLE)}
+            description={isBreeding ? "孕育中不可战斗" : `挑战关卡 ${player.unlockedChapter}-${player.unlockedLevel}`}
+            onClick={() => activeHero && !isBreeding && setIsLevelSelectOpen(true)}
             disabled={!activeHero || isBreeding}
             primary
           />
@@ -246,8 +215,14 @@ export default function Lobby({
           <NavButton 
             icon={<Users className="w-6 h-6" />}
             title="收藏"
-            description="查看图鉴"
+            description="管理英雄"
             onClick={() => onNavigate(GameState.COLLECTION)}
+          />
+          <NavButton 
+            icon={<Book className="w-6 h-6 text-emerald-400" />}
+            title="图鉴"
+            description="收录传奇"
+            onClick={() => onNavigate(GameState.GALLERY)}
           />
           <NavButton 
             icon={<ShoppingBag className="w-6 h-6 text-yellow-400" />}
@@ -257,6 +232,138 @@ export default function Lobby({
           />
         </div>
       </div>
+      {/* Level Selection Modal */}
+      <AnimatePresence>
+        {isLevelSelectOpen && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsLevelSelectOpen(false)}
+              className="absolute inset-0 bg-black/80 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-4xl bg-zinc-900 border border-white/10 rounded-[2rem] overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              {/* Header */}
+              <div className="p-6 border-b border-white/10 flex items-center justify-between bg-zinc-800/50">
+                <div>
+                  <h2 className="text-2xl font-bold">选择关卡</h2>
+                  <p className="text-white/40 text-sm">挑战更强大的敌人，获取丰厚奖励</p>
+                </div>
+                <button 
+                  onClick={() => setIsLevelSelectOpen(false)}
+                  className="p-2 hover:bg-white/10 rounded-full transition-colors"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+
+              <div className="flex flex-1 overflow-hidden">
+                {/* Chapter Sidebar */}
+                <div className="w-32 sm:w-48 border-r border-white/10 overflow-y-auto bg-black/20">
+                  {Array.from({ length: 20 }).map((_, i) => {
+                    const chapter = i + 1;
+                    const isUnlocked = chapter <= player.unlockedChapter;
+                    const isCleared = player.unlockedChapter > chapter;
+                    const hasReward = !player.clearedChapters.includes(chapter) && isCleared;
+
+                    return (
+                      <button
+                        key={chapter}
+                        onClick={() => isUnlocked && setSelectedChapter(chapter)}
+                        disabled={!isUnlocked}
+                        className={cn(
+                          "w-full p-4 text-left transition-all border-b border-white/5 relative group",
+                          selectedChapter === chapter ? "bg-emerald-500/10 text-emerald-400" : "hover:bg-white/5",
+                          !isUnlocked && "opacity-40 grayscale"
+                        )}
+                      >
+                        <div className="text-[10px] uppercase tracking-wider opacity-50 mb-1">Chapter</div>
+                        <div className="font-bold flex items-center justify-between">
+                          <span>第 {chapter} 章节</span>
+                          {!isUnlocked && <Lock className="w-3 h-3" />}
+                        </div>
+                        {hasReward && (
+                          <div className="absolute top-2 right-2">
+                            <span className="flex h-2 w-2 rounded-full bg-red-500 animate-ping" />
+                          </div>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Level Grid */}
+                <div className="flex-1 p-6 overflow-y-auto">
+                  <div className="flex items-center justify-between mb-6">
+                    <h3 className="text-xl font-bold">第 {selectedChapter} 章节</h3>
+                    {player.unlockedChapter > selectedChapter && !player.clearedChapters.includes(selectedChapter) && (
+                      <button 
+                        onClick={() => onClaimChapterReward(selectedChapter)}
+                        className="flex items-center gap-2 px-4 py-2 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-xl transition-all"
+                      >
+                        <Gift className="w-4 h-4" />
+                        领取 2000 钻石
+                      </button>
+                    )}
+                    {player.clearedChapters.includes(selectedChapter) && (
+                      <div className="flex items-center gap-2 text-emerald-400 text-sm font-bold">
+                        <Check className="w-4 h-4" />
+                        奖励已领取
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+                    {Array.from({ length: 10 }).map((_, i) => {
+                      const level = i + 1;
+                      const isUnlocked = selectedChapter < player.unlockedChapter || (selectedChapter === player.unlockedChapter && level <= player.unlockedLevel);
+                      const isElite = level === 5;
+                      const isBoss = level === 10;
+
+                      return (
+                        <button
+                          key={level}
+                          onClick={() => {
+                            if (isUnlocked) {
+                              onSelectStage(selectedChapter, level);
+                              setIsLevelSelectOpen(false);
+                              onNavigate(GameState.BATTLE);
+                            }
+                          }}
+                          disabled={!isUnlocked}
+                          className={cn(
+                            "aspect-square rounded-2xl border flex flex-col items-center justify-center gap-2 transition-all relative group",
+                            isUnlocked 
+                              ? isBoss ? "bg-red-500/10 border-red-500/30 hover:bg-red-500/20" :
+                                isElite ? "bg-purple-500/10 border-purple-500/30 hover:bg-purple-500/20" :
+                                "bg-white/5 border-white/10 hover:bg-white/10"
+                              : "bg-black/40 border-white/5 opacity-40 grayscale cursor-not-allowed"
+                          )}
+                        >
+                          <div className="text-2xl font-black font-mono">{level}</div>
+                          <div className="text-[10px] font-bold uppercase tracking-widest opacity-60">
+                            {isBoss ? '首领' : isElite ? '精英' : '普通'}
+                          </div>
+                          {!isUnlocked && <Lock className="absolute top-2 right-2 w-3 h-3 opacity-40" />}
+                          {isUnlocked && (
+                            <div className="absolute inset-0 border-2 border-emerald-500/0 group-hover:border-emerald-500/50 rounded-2xl transition-all" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </motion.div>
   );
 }

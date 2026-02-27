@@ -7,8 +7,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Sword, Sparkles, Trophy, Users, Coins, Gem, ChevronLeft, Play, Info, Save, Upload, Trash2, Database, Settings } from 'lucide-react';
 import { GameState, Player, Hero, Monster, Rarity, Gender, HeroClass, Pet, Stats, Prisoner, MonsterType, Race, Bloodline, InventoryItem, Offspring, MentalState, BodyPart } from './types';
-import { HERO_NAMES, PET_TEMPLATES, generateMonster } from './constants';
+import { HERO_NAMES, PET_TEMPLATES, generateMonster, SP_DESCRIPTIONS, FIXED_HEROES } from './constants';
 import { cn } from './lib/utils';
+import { calculateRating, generateBaseStats } from './lib/gameUtils';
 
 // Components
 import Lobby from './components/Lobby';
@@ -20,6 +21,7 @@ import InteractionScreen from './components/InteractionScreen';
 import PrisonScreen from './components/PrisonScreen';
 import ShopScreen from './components/ShopScreen';
 import OffspringTrainingScreen from './components/OffspringTrainingScreen';
+import GalleryScreen from './components/GalleryScreen';
 import LevelUpModal from './components/LevelUpModal';
 import SettingsModal from './components/SettingsModal';
 
@@ -32,6 +34,9 @@ const INITIAL_PLAYER: Player = {
   level: 1,
   currentStage: 1,
   currentSubStage: 1,
+  unlockedChapter: 1,
+  unlockedLevel: 1,
+  clearedChapters: [],
   clearedEliteStages: [],
   collection: [],
   petCollection: [],
@@ -39,6 +44,7 @@ const INITIAL_PLAYER: Player = {
   activeHeroId: null,
   activePetId: null,
   pityCount: 0,
+  spPityCount: 0,
   targetRace: Race.ELF,
   bloodlines: [{ race: Race.HUMAN, purity: 100 }],
   offsprings: [],
@@ -73,7 +79,13 @@ export default function App() {
       bloodlines: parsed.bloodlines || [{ race: Race.HUMAN, purity: 100 }],
       offsprings: (parsed.offsprings || []).map(migrateHero) as Offspring[],
       inventory: parsed.inventory || [],
+      pityCount: parsed.pityCount || 0,
+      spPityCount: parsed.spPityCount || 0,
+      currentStage: parsed.currentStage || 1,
       currentSubStage: parsed.currentSubStage || 1,
+      unlockedChapter: parsed.unlockedChapter || parsed.currentStage || 1,
+      unlockedLevel: parsed.unlockedLevel || parsed.currentSubStage || 1,
+      clearedChapters: parsed.clearedChapters || [],
       clearedEliteStages: parsed.clearedEliteStages || [],
     };
   });
@@ -114,7 +126,7 @@ export default function App() {
             changed = true;
             // Pregnancy finished - generate offspring
             const weights: Record<Rarity, number> = {
-              [Rarity.C]: 1, [Rarity.B]: 2, [Rarity.A]: 5, [Rarity.S]: 15, [Rarity.SS]: 40, [Rarity.SSS]: 100,
+              [Rarity.C]: 1, [Rarity.B]: 2, [Rarity.A]: 5, [Rarity.S]: 15, [Rarity.SS]: 40, [Rarity.SSS]: 100, [Rarity.SP]: 250,
             };
             const parentWeight = weights[p.rarity];
             const roll = Math.random();
@@ -125,6 +137,7 @@ export default function App() {
             else if (roll < parentWeight / 20) rarity = Rarity.A;
             else if (roll < parentWeight / 5) rarity = Rarity.B;
 
+            const stats = generateBaseStats(rarity);
             const offspring: Offspring = {
               id: Math.random().toString(36).substr(2, 9),
               name: `${p.name}之子`,
@@ -136,9 +149,9 @@ export default function App() {
               level: 1,
               exp: 0,
               maxExp: 100,
-              stats: { hp: 100, maxHp: 100, atk: 20, def: 10, spd: 10, skill: 10 },
+              stats,
               description: "在囚牢中诞下的后代。",
-              rating: Math.floor(Math.random() * 50) + 50,
+              rating: calculateRating(stats, rarity, p.bloodlines),
               affection: 30,
               isAdult: false,
               trainingCount: 0,
@@ -215,16 +228,24 @@ export default function App() {
 
     const newHeroes: Hero[] = [];
     let newPityCount = player.pityCount;
+    let newSpPityCount = player.spPityCount;
 
     for (let i = 0; i < count; i++) {
       newPityCount++;
+      newSpPityCount++;
       const rarityRoll = Math.random();
       let rarity = Rarity.C;
       let race = Race.HUMAN;
       let bloodlines: Bloodline[] = [{ race: Race.HUMAN, purity: 100 }];
 
-      // SSS Pure Blood Check (0.1% or Pity 100)
-      if (rarityRoll < 0.001 || newPityCount >= 100) {
+      // SP Pure Blood Check (0.05% or Pity 200)
+      if (rarityRoll < 0.0005 || newSpPityCount >= 200) {
+        rarity = Rarity.SP;
+        race = targetRace;
+        bloodlines = [{ race: targetRace, purity: 100 }];
+        newSpPityCount = 0;
+        newPityCount = 0; // Reset SSS pity too when getting SP
+      } else if (rarityRoll < 0.005 || newPityCount >= 100) {
         rarity = Rarity.SSS;
         race = targetRace;
         bloodlines = [{ race: targetRace, purity: 100 }];
@@ -253,45 +274,43 @@ export default function App() {
       const classes = [HeroClass.MAGE, HeroClass.SWORDSMAN, HeroClass.HEALER];
       const hClass = classes[Math.floor(Math.random() * classes.length)];
       const genders = [Gender.MALE, Gender.FEMALE, Gender.NON_BINARY];
-      const gender = genders[Math.floor(Math.random() * genders.length)];
       
-      const baseStatsMap = {
-        [Rarity.C]: { min: 10, max: 30 },
-        [Rarity.B]: { min: 30, max: 60 },
-        [Rarity.A]: { min: 60, max: 100 },
-        [Rarity.S]: { min: 100, max: 200 },
-        [Rarity.SS]: { min: 200, max: 400 },
-        [Rarity.SSS]: { min: 400, max: 800 },
-      };
-      const baseStats = baseStatsMap[rarity];
+      const stats = generateBaseStats(rarity);
+      let name = HERO_NAMES[Math.floor(Math.random() * HERO_NAMES.length)];
+      let description = rarity === Rarity.SP 
+        ? SP_DESCRIPTIONS[Math.floor(Math.random() * SP_DESCRIPTIONS.length)]
+        : `一位来自${race}的英雄。`;
+      let finalGender = genders[Math.floor(Math.random() * genders.length)];
+      let isFixed = false;
 
-      const stats: Stats = {
-        hp: Math.floor(Math.random() * (baseStats.max - baseStats.min) + baseStats.min) * 5,
-        maxHp: 0,
-        atk: Math.floor(Math.random() * (baseStats.max - baseStats.min) + baseStats.min),
-        def: Math.floor(Math.random() * (baseStats.max - baseStats.min) + baseStats.min) / 2,
-        spd: Math.floor(Math.random() * 20) + 5,
-        skill: Math.floor(Math.random() * (baseStats.max - baseStats.min) + baseStats.min),
-      };
-      stats.maxHp = stats.hp;
-
-      const rating = stats.hp / 5 + stats.atk + stats.def + stats.spd + stats.skill;
+      // Fixed Heroes for SSS and SP
+      if (rarity === Rarity.SSS || rarity === Rarity.SP) {
+        const fixedPool = FIXED_HEROES.filter(h => h.race === race && h.rarity === rarity);
+        if (fixedPool.length > 0) {
+          const fixed = fixedPool[Math.floor(Math.random() * fixedPool.length)];
+          name = fixed.name;
+          description = fixed.description;
+          finalGender = fixed.gender;
+          isFixed = true;
+        }
+      }
 
       const newHero: Hero = {
         id: Math.random().toString(36).substr(2, 9),
-        name: HERO_NAMES[Math.floor(Math.random() * HERO_NAMES.length)],
+        name,
         rarity,
         class: hClass,
-        gender,
+        gender: finalGender,
         race,
         bloodlines,
         level: 1,
         exp: 0,
         maxExp: 100,
         stats,
-        description: `一位来自${race}的英雄。`,
-        rating: Math.floor(rating),
-        affection: 0
+        description,
+        rating: calculateRating(stats, rarity, bloodlines),
+        affection: 0,
+        isFixed
       };
       newHeroes.push(newHero);
     }
@@ -302,11 +321,12 @@ export default function App() {
       collection: [...prev.collection, ...newHeroes],
       activeHeroId: prev.activeHeroId || newHeroes[0].id,
       pityCount: newPityCount,
+      spPityCount: newSpPityCount,
       targetRace
     }));
     setLastSummoned(newHeroes);
     return true;
-  }, [player.gems, player.pityCount]);
+  }, [player.gems, player.pityCount, player.spPityCount, determineRaceFromBloodlines]);
 
   const handlePetSummon = useCallback((count: number) => {
     const cost = count === 1 ? 100 : 900;
@@ -408,7 +428,7 @@ export default function App() {
         let isBreakthroughRequired = h.isBreakthroughRequired || false;
 
         for (let i = 0; i < levels; i++) {
-          if (isBreakthroughRequired || newLevel >= 80) break;
+          if (isBreakthroughRequired || newLevel >= 100) break;
           
           newLevel++;
           newMaxExp = Math.floor(newMaxExp * 1.1);
@@ -420,7 +440,7 @@ export default function App() {
           newStats.spd = Math.floor(newStats.spd * 1.01) || newStats.spd + 1;
           newStats.skill = Math.floor(newStats.skill * 1.01);
 
-          if (newLevel % 20 === 0 && newLevel < 80) {
+          if (newLevel % 20 === 0 && newLevel < 100) {
             isBreakthroughRequired = true;
           }
         }
@@ -432,7 +452,7 @@ export default function App() {
           maxExp: newMaxExp,
           stats: newStats,
           isBreakthroughRequired,
-          rating: Math.floor(newStats.hp / 5 + newStats.atk + newStats.def + newStats.spd + newStats.skill)
+          rating: calculateRating(newStats, h.rarity, h.bloodlines)
         };
       });
 
@@ -451,7 +471,7 @@ export default function App() {
       if (!hero || !hero.isBreakthroughRequired) return prev;
 
       const RARITY_INDEX: Record<Rarity, number> = {
-        [Rarity.C]: 0, [Rarity.B]: 1, [Rarity.A]: 2, [Rarity.S]: 3, [Rarity.SS]: 4, [Rarity.SSS]: 5,
+        [Rarity.C]: 0, [Rarity.B]: 1, [Rarity.A]: 2, [Rarity.S]: 3, [Rarity.SS]: 4, [Rarity.SSS]: 5, [Rarity.SP]: 6,
       };
       const levelTier = Math.floor(hero.level / 20);
       const rarityIndex = RARITY_INDEX[hero.rarity];
@@ -484,6 +504,63 @@ export default function App() {
     const a = document.createElement('a');
     a.href = url;
     a.download = `mythic_summoner_save_${new Date().toISOString().split('T')[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [player]);
+
+  const handleExportHtml = useCallback(() => {
+    const data = JSON.stringify(player);
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>神话召唤师 - 存档导出</title>
+    <style>
+        body { font-family: system-ui, -apple-system, sans-serif; background: #09090b; color: #fff; padding: 2rem; line-height: 1.5; }
+        .card { background: #18181b; border: 1px solid #27272a; padding: 1.5rem; border-radius: 1rem; max-width: 600px; margin: 0 auto; }
+        h1 { color: #10b981; margin-top: 0; }
+        .stat { display: flex; justify-content: space-between; margin-bottom: 0.5rem; border-bottom: 1px solid #27272a; padding-bottom: 0.5rem; }
+        .label { color: #a1a1aa; }
+        .value { font-weight: bold; }
+        .json-box { background: #000; padding: 1rem; border-radius: 0.5rem; font-family: monospace; font-size: 12px; overflow: auto; max-height: 200px; margin-top: 1rem; white-space: pre-wrap; word-break: break-all; }
+        .btn { display: block; width: 100%; padding: 1rem; background: #10b981; color: #000; text-align: center; text-decoration: none; border-radius: 0.5rem; font-weight: bold; margin-top: 1.5rem; cursor: pointer; border: none; }
+        .btn:hover { background: #34d399; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>神话召唤师 存档</h1>
+        <div class="stat"><span class="label">玩家名称:</span> <span class="value">${player.name}</span></div>
+        <div class="stat"><span class="label">等级:</span> <span class="value">Lv.${player.level}</span></div>
+        <div class="stat"><span class="label">宝石:</span> <span class="value">${player.gems}</span></div>
+        <div class="stat"><span class="label">金币:</span> <span class="value">${player.gold}</span></div>
+        <div class="stat"><span class="label">英雄数量:</span> <span class="value">${player.collection.length}</span></div>
+        <div class="stat"><span class="label">囚犯数量:</span> <span class="value">${player.prisoners.length}</span></div>
+        
+        <p style="font-size: 12px; color: #71717a; margin-top: 1rem;">以下是加密的存档数据，您可以复制并粘贴到游戏的导入功能中：</p>
+        <div class="json-box" id="saveData">${data}</div>
+        
+        <button class="btn" onclick="copyData()">复制存档数据</button>
+    </div>
+
+    <script>
+        function copyData() {
+            const data = document.getElementById('saveData').innerText;
+            navigator.clipboard.writeText(data).then(() => {
+                alert('存档数据已复制到剪贴板！');
+            });
+        }
+    </script>
+</body>
+</html>
+    `;
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mythic_summoner_save_${new Date().toISOString().split('T')[0]}.html`;
     a.click();
     URL.revokeObjectURL(url);
   }, [player]);
@@ -586,7 +663,7 @@ export default function App() {
 
       // Generate Offspring
       const weights: Record<Rarity, number> = {
-        [Rarity.C]: 1, [Rarity.B]: 2, [Rarity.A]: 5, [Rarity.S]: 15, [Rarity.SS]: 40, [Rarity.SSS]: 100,
+        [Rarity.C]: 1, [Rarity.B]: 2, [Rarity.A]: 5, [Rarity.S]: 15, [Rarity.SS]: 40, [Rarity.SSS]: 100, [Rarity.SP]: 250,
       };
       const parentWeight = weights[hero.rarity];
       const roll = Math.random();
@@ -605,28 +682,30 @@ export default function App() {
       let bloodlines = Object.entries(combined).map(([race, purity]) => ({ race: race as Race, purity }));
       const mainRace = determineRaceFromBloodlines(bloodlines);
       
-      const offspring: Offspring = {
-        id: Math.random().toString(36).substr(2, 9),
-        name: `${hero.name}之子`,
-        rarity,
-        class: hero.class,
-        gender: Math.random() > 0.5 ? Gender.MALE : Gender.FEMALE,
-        race: mainRace,
-        bloodlines,
-        level: 1,
-        exp: 0,
-        maxExp: 100,
-        stats: { hp: 100, maxHp: 100, atk: 20, def: 10, spd: 10, skill: 10 },
-        description: "继承了强大血统的后代。",
-        rating: Math.floor(Math.random() * 50) + 50,
-        affection: 30,
-        isAdult: false,
-        trainingCount: 0,
-        motherId: hero.id,
-        fatherId: fatherId || 'player',
-        parents: [hero.id, fatherId || 'player'],
-        grandparents: [...(hero.parents || []), ...(father.parents || [])].slice(0, 4)
-      };
+        const stats = generateBaseStats(rarity);
+        
+        const offspring: Offspring = {
+          id: Math.random().toString(36).substr(2, 9),
+          name: `${hero.name}之子`,
+          rarity,
+          class: hero.class,
+          gender: Math.random() > 0.5 ? Gender.MALE : Gender.FEMALE,
+          race: mainRace,
+          bloodlines,
+          level: 1,
+          exp: 0,
+          maxExp: 100,
+          stats,
+          description: "继承了强大血统的后代。",
+          rating: calculateRating(stats, rarity, bloodlines),
+          affection: 30,
+          isAdult: false,
+          trainingCount: 0,
+          motherId: hero.id,
+          fatherId: fatherId || 'player',
+          parents: [hero.id, fatherId || 'player'],
+          grandparents: [...(hero.parents || []), ...(father.parents || [])].slice(0, 4)
+        };
 
       const updateHero = (h: any) => {
         if (h.id !== heroId) return h;
@@ -667,7 +746,7 @@ export default function App() {
           ...o,
           stats,
           trainingCount: o.trainingCount + 1,
-          rating: o.rating + Math.floor(gain / 2)
+          rating: calculateRating(stats, o.rarity, o.bloodlines)
         };
       });
 
@@ -725,14 +804,15 @@ export default function App() {
     });
   }, []);
 
-  const handleExchangeCurrency = useCallback((mode: 'gem_to_gold' | 'gold_to_gem') => {
+  const handleExchangeCurrency = useCallback((mode: 'gem_to_gold' | 'gold_to_gem', amount: number = 1) => {
     setPlayer(prev => {
       if (mode === 'gem_to_gold') {
-        if (prev.gems < 1) return prev;
-        return { ...prev, gems: prev.gems - 1, gold: prev.gold + 100 };
+        if (prev.gems < amount) return prev;
+        return { ...prev, gems: prev.gems - amount, gold: prev.gold + amount * 100 };
       } else {
-        if (prev.gold < 150) return prev;
-        return { ...prev, gold: prev.gold - 150, gems: prev.gems + 1 };
+        const cost = amount * 150;
+        if (prev.gold < cost) return prev;
+        return { ...prev, gold: prev.gold - cost, gems: prev.gems + amount };
       }
     });
   }, []);
@@ -753,7 +833,7 @@ export default function App() {
       maxExp: 100,
       stats: { ...prisoner.stats },
       description: "曾经的俘虏，现在是忠诚的伙伴。",
-      rating: Math.floor(prisoner.stats.hp / 5 + prisoner.stats.atk + prisoner.stats.def + prisoner.stats.spd + prisoner.stats.skill),
+      rating: calculateRating(prisoner.stats, prisoner.rarity, prisoner.bloodlines),
       affection: 50
     };
 
@@ -770,7 +850,7 @@ export default function App() {
       if (!prisoner) return prev;
       
       const gemRewards: Record<Rarity, number> = {
-        [Rarity.C]: 10, [Rarity.B]: 20, [Rarity.A]: 50, [Rarity.S]: 100, [Rarity.SS]: 200, [Rarity.SSS]: 500
+        [Rarity.C]: 10, [Rarity.B]: 20, [Rarity.A]: 50, [Rarity.S]: 100, [Rarity.SS]: 200, [Rarity.SSS]: 500, [Rarity.SP]: 2000
       };
       
       return {
@@ -785,7 +865,7 @@ export default function App() {
     setPlayer(prev => {
       let gemGain = 0;
       const gemRewards: Record<Rarity, number> = {
-        [Rarity.C]: 10, [Rarity.B]: 20, [Rarity.A]: 50, [Rarity.S]: 100, [Rarity.SS]: 200, [Rarity.SSS]: 500
+        [Rarity.C]: 10, [Rarity.B]: 20, [Rarity.A]: 50, [Rarity.S]: 100, [Rarity.SS]: 200, [Rarity.SSS]: 500, [Rarity.SP]: 2000
       };
 
       const remainingPrisoners = prev.prisoners.filter(p => {
@@ -869,7 +949,7 @@ export default function App() {
 
       // Immediate generation
       const weights: Record<Rarity, number> = {
-        [Rarity.C]: 1, [Rarity.B]: 2, [Rarity.A]: 5, [Rarity.S]: 15, [Rarity.SS]: 40, [Rarity.SSS]: 100,
+        [Rarity.C]: 1, [Rarity.B]: 2, [Rarity.A]: 5, [Rarity.S]: 15, [Rarity.SS]: 40, [Rarity.SSS]: 100, [Rarity.SP]: 250,
       };
       const parentWeight = weights[prisoner.rarity];
       const roll = Math.random();
@@ -880,29 +960,31 @@ export default function App() {
       else if (roll < parentWeight / 20) rarity = Rarity.A;
       else if (roll < parentWeight / 5) rarity = Rarity.B;
 
-      const offspring: Offspring = {
-        id: Math.random().toString(36).substr(2, 9),
-        name: `${prisoner.name}之子`,
-        rarity,
-        class: prisoner.class,
-        gender: Math.random() > 0.5 ? Gender.MALE : Gender.FEMALE,
-        race: prisoner.race,
-        bloodlines: prisoner.bloodlines,
-        level: 1,
-        exp: 0,
-        maxExp: 100,
-        stats: { hp: 100, maxHp: 100, atk: 20, def: 10, spd: 10, skill: 10 },
-        description: "在囚牢中诞下的后代。",
-        rating: Math.floor(Math.random() * 50) + 50,
-        affection: 30,
-        isAdult: false,
-        trainingCount: 0,
-        motherId: prisoner.id,
-        fatherId: 'player',
-        isPrisonOrigin: true,
-        parents: [prisoner.id, 'player'],
-        grandparents: prisoner.bloodlines.map(b => b.race).slice(0, 2)
-      };
+        const stats = generateBaseStats(rarity);
+
+        const offspring: Offspring = {
+          id: Math.random().toString(36).substr(2, 9),
+          name: `${prisoner.name}之子`,
+          rarity,
+          class: prisoner.class,
+          gender: Math.random() > 0.5 ? Gender.MALE : Gender.FEMALE,
+          race: prisoner.race,
+          bloodlines: prisoner.bloodlines,
+          level: 1,
+          exp: 0,
+          maxExp: 100,
+          stats,
+          description: "在囚牢中诞下的后代。",
+          rating: calculateRating(stats, rarity, prisoner.bloodlines),
+          affection: 30,
+          isAdult: false,
+          trainingCount: 0,
+          motherId: prisoner.id,
+          fatherId: 'player',
+          isPrisonOrigin: true,
+          parents: [prisoner.id, 'player'],
+          grandparents: prisoner.bloodlines.map(b => b.race).slice(0, 2)
+        };
 
       const prisoners = prev.prisoners.map(p => {
         if (p.id !== id) return p;
@@ -985,36 +1067,122 @@ export default function App() {
   const handleBattleEnd = useCallback((won: boolean, rewards: { gold: number, gems: number, exp: number }, monster: Monster) => {
     if (won) {
       setPlayer(prev => {
-        let nextSubStage = prev.currentSubStage + 1;
-        let nextDifficulty = prev.currentStage;
-        const clearedEliteStages = [...prev.clearedEliteStages];
+        let newUnlockedChapter = prev.unlockedChapter;
+        let newUnlockedLevel = prev.unlockedLevel;
 
-        if (monster.type === MonsterType.ELITE || monster.type === MonsterType.BOSS) {
-          clearedEliteStages.push(`${prev.currentStage}-${prev.currentSubStage}`);
-          nextDifficulty = prev.currentStage + 1;
-          nextSubStage = 1;
+        // If we just beat the furthest unlocked level, unlock the next one
+        if (prev.currentStage === prev.unlockedChapter && prev.currentSubStage === prev.unlockedLevel) {
+          if (prev.unlockedLevel < 10) {
+            newUnlockedLevel = prev.unlockedLevel + 1;
+          } else if (prev.unlockedChapter < 20) {
+            newUnlockedChapter = prev.unlockedChapter + 1;
+            newUnlockedLevel = 1;
+          }
         }
+
+        const clearedEliteStages = [...prev.clearedEliteStages];
+        const stageKey = `${prev.currentStage}-${prev.currentSubStage}`;
+        if ((monster.type === MonsterType.ELITE || monster.type === MonsterType.BOSS) && !clearedEliteStages.includes(stageKey)) {
+          clearedEliteStages.push(stageKey);
+        }
+
+        // Give EXP to active hero
+        const updateList = (list: any[]) => list.map(h => {
+          if (h.id !== prev.activeHeroId) return h;
+          
+          let newExp = h.exp + rewards.exp;
+          let newLevel = h.level;
+          let newMaxExp = h.maxExp;
+          let newStats = { ...h.stats };
+          let isBreakthroughRequired = h.isBreakthroughRequired || false;
+
+          while (newExp >= newMaxExp && !isBreakthroughRequired && newLevel < 100) {
+            newExp -= newMaxExp;
+            newLevel++;
+            newMaxExp = Math.floor(newMaxExp * 1.1);
+            newStats.hp = Math.floor(newStats.hp * 1.01);
+            newStats.maxHp = newStats.hp;
+            newStats.atk = Math.floor(newStats.atk * 1.01);
+            newStats.def = Math.floor(newStats.def * 1.01);
+            newStats.spd = Math.floor(newStats.spd * 1.01) || newStats.spd + 1;
+            newStats.skill = Math.floor(newStats.skill * 1.01);
+
+            if (newLevel % 20 === 0 && newLevel < 100) {
+              isBreakthroughRequired = true;
+            }
+          }
+
+          return {
+            ...h,
+            level: newLevel,
+            exp: newExp,
+            maxExp: newMaxExp,
+            stats: newStats,
+            isBreakthroughRequired,
+            rating: calculateRating(newStats, h.rarity, h.bloodlines)
+          };
+        });
 
         return {
           ...prev,
           gold: prev.gold + rewards.gold,
           gems: prev.gems + rewards.gems,
           exp: prev.exp + rewards.exp,
-          currentStage: nextDifficulty,
-          currentSubStage: nextSubStage,
-          clearedEliteStages
+          unlockedChapter: newUnlockedChapter,
+          unlockedLevel: newUnlockedLevel,
+          clearedEliteStages,
+          collection: updateList(prev.collection),
+          offsprings: updateList(prev.offsprings)
         };
       });
       handleCapture(monster, monster.type === MonsterType.BOSS);
-    } else {
-      if (monster.type === MonsterType.ELITE || monster.type === MonsterType.BOSS) {
-        setPlayer(prev => ({ ...prev, currentSubStage: 1 }));
-      }
     }
   }, [handleCapture]);
 
+  const handleClaimChapterReward = useCallback((chapter: number) => {
+    setPlayer(prev => {
+      if (prev.clearedChapters.includes(chapter)) return prev;
+      // Check if chapter is fully cleared (all 10 levels)
+      // Actually, if they unlocked the next chapter, it means they cleared this one
+      if (prev.unlockedChapter <= chapter && !(prev.unlockedChapter === chapter + 1)) return prev;
+
+      return {
+        ...prev,
+        gems: prev.gems + 2000,
+        clearedChapters: [...prev.clearedChapters, chapter]
+      };
+    });
+  }, []);
+
   const handleRetryBattle = useCallback(() => {
     setGameState(GameState.BATTLE);
+  }, []);
+
+  const handleNextLevel = useCallback(() => {
+    setPlayer(prev => {
+      let nextLevel = prev.currentSubStage + 1;
+      let nextChapter = prev.currentStage;
+      if (nextLevel > 10) {
+        if (nextChapter < 20) {
+          nextChapter++;
+          nextLevel = 1;
+        } else {
+          // Already at max level
+          return prev;
+        }
+      }
+      
+      // Check if the next level is unlocked
+      if (nextChapter > prev.unlockedChapter || (nextChapter === prev.unlockedChapter && nextLevel > prev.unlockedLevel)) {
+        return prev;
+      }
+
+      return { ...prev, currentStage: nextChapter, currentSubStage: nextLevel };
+    });
+    // Re-trigger battle by setting state to LOBBY then back to BATTLE quickly
+    // or just let the key change in BattleScreen handle it
+    setGameState(GameState.LOBBY);
+    setTimeout(() => setGameState(GameState.BATTLE), 10);
   }, []);
 
   const handleSweep = useCallback(() => {
@@ -1136,13 +1304,14 @@ export default function App() {
               player={player}
               activeHero={activeHero}
               activePet={activePet}
-              currentDifficulty={player.currentStage || 1}
-              selectedDifficulty={selectedDifficulty}
-              onSelectDifficulty={setSelectedDifficulty}
               onNavigate={setGameState}
               onRenameHero={renameHero}
               onManualLevelUp={handleManualLevelUp}
               onOpenSettings={() => setIsSettingsOpen(true)}
+              onSelectStage={(chapter, level) => {
+                setPlayer(prev => ({ ...prev, currentStage: chapter, currentSubStage: level }));
+              }}
+              onClaimChapterReward={handleClaimChapterReward}
             />
           )}
           {gameState === GameState.GACHA && (
@@ -1164,7 +1333,7 @@ export default function App() {
           )}
           {gameState === GameState.BATTLE && (
             <BattleScreen 
-              key="battle"
+              key={`${player.currentStage}-${player.currentSubStage}`}
               hero={activeHero!}
               difficulty={player.currentStage}
               subStage={player.currentSubStage}
@@ -1172,6 +1341,7 @@ export default function App() {
               onRetry={handleRetryBattle}
               onExit={() => setGameState(GameState.LOBBY)}
               onSweep={handleSweep}
+              onNextLevel={handleNextLevel}
             />
           )}
           {gameState === GameState.COLLECTION && (
@@ -1229,6 +1399,13 @@ export default function App() {
               onExchange={handleExchangeCurrency}
             />
           )}
+          {gameState === GameState.GALLERY && (
+            <GalleryScreen 
+              key="gallery"
+              player={player}
+              onClose={() => setGameState(GameState.LOBBY)}
+            />
+          )}
           {gameState === GameState.OFFSPRING_TRAINING && selectedOffspringId && (
             <OffspringTrainingScreen
               key="offspring-training"
@@ -1250,6 +1427,7 @@ export default function App() {
           <SettingsModal 
             onClose={() => setIsSettingsOpen(false)}
             onExport={handleExportData}
+            onExportHtml={handleExportHtml}
             onImport={handleImportData}
             onClear={handleClearData}
           />

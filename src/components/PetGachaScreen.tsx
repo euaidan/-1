@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Coins, Gem } from 'lucide-react';
-import { Player, Pet, Rarity } from '../types';
-import { cn } from '../lib/utils';
+import { Player, Pet, Rarity } from '@/types';
+import { cn } from '@/lib/utils';
 
 interface PetGachaScreenProps {
   player: Player;

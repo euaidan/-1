@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Player, Hero, Rarity, Pet, Race, Offspring } from '../types';
-import { cn } from '../lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Player, Hero, Rarity, Pet, Race, Offspring } from '@/types';
+import { cn } from '@/lib/utils';
 import { Users, Heart, Sword, Shield, Zap, CheckCircle2, Edit2, Check, X, Sparkles, Baby, GraduationCap, Dna, Pin, Lock, Unlock, Trash2, Filter, ArrowUpDown } from 'lucide-react';
 
 import HeroAvatar from './HeroAvatar';

@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { X, Sparkles, Gem, ArrowUpCircle, Trophy } from 'lucide-react';
-import { Hero, Rarity, Player } from '../types';
-import { cn } from '../lib/utils';
+import { Hero, Rarity, Player } from '@/types';
+import { cn } from '@/lib/utils';
 
 interface LevelUpModalProps {
   hero: Hero;
@@ -19,6 +19,7 @@ const RARITY_INDEX: Record<Rarity, number> = {
   [Rarity.S]: 3,
   [Rarity.SS]: 4,
   [Rarity.SSS]: 5,
+  [Rarity.SP]: 6,
 };
 
 export default function LevelUpModal({ hero, player, onClose, onLevelUp, onBreakthrough }: LevelUpModalProps) {
@@ -31,27 +32,21 @@ export default function LevelUpModal({ hero, player, onClose, onLevelUp, onBreak
   };
 
   const canLevelUp = (levels: number) => {
-    if (hero.level + levels > 80) return false;
+    if (hero.level + levels > 100) return false;
+    if (hero.isBreakthroughRequired) return false;
+    
     // Check if breakthrough is needed in between
     for (let i = 1; i <= levels; i++) {
-      const nextLevel = hero.level + i;
-      if (nextLevel > 80) return false;
-      if ((hero.level + i - 1) % 20 === 0 && (hero.level + i - 1) !== 0) {
-         // If we are at 20, 40, 60, we need breakthrough to reach 21, 41, 61
-         return false; 
+      const currentCheckingLevel = hero.level + i - 1;
+      if (currentCheckingLevel >= 100) return false;
+      
+      // If the level we are AT is a breakthrough point, we can't go further without breakthrough
+      if (currentCheckingLevel > 0 && currentCheckingLevel % 20 === 0) {
+        return false;
       }
     }
     
-    // Calculate total EXP needed
-    let totalExpNeeded = 0;
-    let currentLevel = hero.level;
-    let currentMaxExp = hero.maxExp;
-    for (let i = 0; i < levels; i++) {
-      totalExpNeeded += (currentMaxExp - (i === 0 ? hero.exp : 0));
-      currentMaxExp = Math.floor(currentMaxExp * 1.1);
-      currentLevel++;
-    }
-    
+    const totalExpNeeded = calculateExpNeeded(levels);
     return player.exp >= totalExpNeeded;
   };
 
@@ -70,6 +65,24 @@ export default function LevelUpModal({ hero, player, onClose, onLevelUp, onBreak
   const handleLevelUpClick = (levels: number) => {
     if (canLevelUp(levels)) {
       onLevelUp(hero.id, levels);
+    }
+  };
+
+  const handleOneClickUpgrade = (targetLevel: number) => {
+    const levelsNeeded = targetLevel - hero.level;
+    if (levelsNeeded > 0) {
+      // We need to check if any breakthrough is needed in between
+      let possibleLevels = 0;
+      for (let i = 1; i <= levelsNeeded; i++) {
+        if (canLevelUp(i)) {
+          possibleLevels = i;
+        } else {
+          break;
+        }
+      }
+      if (possibleLevels > 0) {
+        onLevelUp(hero.id, possibleLevels);
+      }
     }
   };
 
@@ -115,7 +128,7 @@ export default function LevelUpModal({ hero, player, onClose, onLevelUp, onBreak
             <div className="bg-white/5 p-3 rounded-2xl border border-white/5">
               <div className="text-[10px] text-white/40 uppercase mb-1">下一级评分</div>
               <div className="text-xl font-mono font-bold text-white/60">
-                {hero.level < 80 ? Math.floor(hero.rating * 1.01) : 'MAX'}
+                {hero.level < 100 ? Math.floor(hero.rating * 1.01) : 'MAX'}
               </div>
             </div>
           </div>
@@ -152,30 +165,56 @@ export default function LevelUpModal({ hero, player, onClose, onLevelUp, onBreak
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-3">
-              {[1, 5, 10].map(levels => {
-                const expNeeded = calculateExpNeeded(levels);
-                const disabled = !canLevelUp(levels);
-                return (
-                  <button
-                    key={levels}
-                    onClick={() => handleLevelUpClick(levels)}
-                    disabled={disabled}
-                    className={cn(
-                      "flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all",
-                      disabled 
-                        ? "bg-white/5 border-white/5 opacity-40 grayscale cursor-not-allowed" 
-                        : "bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20 hover:scale-105"
-                    )}
-                  >
-                    <span className="text-lg font-bold">+{levels}级</span>
-                    <div className="flex items-center gap-1 text-[10px] font-mono text-emerald-400">
-                      <Trophy className="w-3 h-3" />
-                      {expNeeded}
-                    </div>
-                  </button>
-                );
-              })}
+            <div className="space-y-4">
+              <div className="grid grid-cols-3 gap-3">
+                {[1, 5, 10].map(levels => {
+                  const expNeeded = calculateExpNeeded(levels);
+                  const disabled = !canLevelUp(levels);
+                  return (
+                    <button
+                      key={levels}
+                      onClick={() => handleLevelUpClick(levels)}
+                      disabled={disabled}
+                      className={cn(
+                        "flex flex-col items-center gap-2 p-4 rounded-2xl border transition-all",
+                        disabled 
+                          ? "bg-white/5 border-white/5 opacity-40 grayscale cursor-not-allowed" 
+                          : "bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20 hover:scale-105"
+                      )}
+                    >
+                      <span className="text-lg font-bold">+{levels}级</span>
+                      <div className="flex items-center gap-1 text-[10px] font-mono text-emerald-400">
+                        <Trophy className="w-3 h-3" />
+                        {expNeeded}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="space-y-2">
+                <h4 className="text-[10px] font-mono font-bold uppercase text-white/40 tracking-widest">一键升级</h4>
+                <div className="grid grid-cols-5 gap-2">
+                  {[20, 40, 60, 80, 100].map(target => {
+                    const disabled = hero.level >= target || !canLevelUp(1);
+                    return (
+                      <button
+                        key={target}
+                        onClick={() => handleOneClickUpgrade(target)}
+                        disabled={disabled}
+                        className={cn(
+                          "py-2 rounded-lg border text-[10px] font-bold transition-all",
+                          disabled
+                            ? "bg-white/5 border-white/5 opacity-40 grayscale cursor-not-allowed"
+                            : "bg-zinc-800 border-white/10 hover:border-emerald-500/50 text-white/60 hover:text-white"
+                        )}
+                      >
+                        {target}级
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
             </div>
           )}
 

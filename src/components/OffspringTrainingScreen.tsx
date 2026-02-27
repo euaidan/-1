@@ -1,8 +1,8 @@
 import React from 'react';
-import { motion } from 'motion/react';
+import { motion } from 'framer-motion';
 import { GraduationCap, Heart, Sword, Shield, Zap, Sparkles, BookOpen, CheckCircle2 } from 'lucide-react';
-import { Player, Offspring, Stats } from '../types';
-import { cn } from '../lib/utils';
+import { Player, Offspring, Stats } from '@/types';
+import { cn } from '@/lib/utils';
 import HeroAvatar from './HeroAvatar';
 
 interface OffspringTrainingScreenProps {

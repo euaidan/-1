@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Stage, Layer, Rect, Text, Image as KonvaImage, Group } from 'react-konva';
 import { motion, AnimatePresence } from 'motion/react';
-import { Sword, Shield, Zap, Heart, AlertCircle, MessageSquareQuote, FastForward, Play, Pause, SkipForward, ChevronLeft } from 'lucide-react';
+import { Sword, Shield, Zap, Heart, AlertCircle, MessageSquareQuote, FastForward, Play, Pause, SkipForward, ChevronLeft, ChevronRight, RotateCcw, Home } from 'lucide-react';
 import { Hero, Monster, Stats, MonsterType, Rarity } from '../types';
 import { generateMonster } from '../constants';
 import { cn } from '../lib/utils';
@@ -15,6 +15,7 @@ interface BattleScreenProps {
   onRetry: () => void;
   onExit: () => void;
   onSweep: () => void;
+  onNextLevel: () => void;
 }
 
 interface BattleState {
@@ -27,7 +28,7 @@ interface BattleState {
   commentary: string;
 }
 
-export default function BattleScreen({ hero, difficulty, subStage, onBattleEnd, onRetry, onExit, onSweep }: BattleScreenProps) {
+export default function BattleScreen({ hero, difficulty, subStage, onBattleEnd, onRetry, onExit, onSweep, onNextLevel }: BattleScreenProps) {
   const [monster] = useState(() => generateMonster(difficulty, subStage));
   const [battleState, setBattleState] = useState<BattleState>({
     heroHp: hero.stats.hp,
@@ -322,31 +323,52 @@ export default function BattleScreen({ hero, difficulty, subStage, onBattleEnd, 
                 )}
 
                 <div className="flex flex-col gap-3">
-                  {battleState.won && (
-                    <button
-                      onClick={() => onSweep()}
-                      className="w-full py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-xl transition-all flex items-center justify-center gap-2"
-                    >
-                      <FastForward className="w-4 h-4" />
-                      扫荡本关 (10次)
-                    </button>
+                  {battleState.won ? (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={() => onSweep()}
+                          className="py-3 bg-yellow-500 hover:bg-yellow-400 text-black font-bold rounded-xl transition-all flex flex-col items-center justify-center gap-1"
+                        >
+                          <FastForward className="w-5 h-5" />
+                          <span className="text-xs">扫荡</span>
+                        </button>
+                        <button
+                          onClick={onNextLevel}
+                          className="py-3 bg-emerald-500 hover:bg-emerald-400 text-black font-bold rounded-xl transition-all flex flex-col items-center justify-center gap-1"
+                        >
+                          <ChevronRight className="w-5 h-5" />
+                          <span className="text-xs">下一关</span>
+                        </button>
+                      </div>
+                      <button
+                        onClick={onExit}
+                        className="py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2"
+                      >
+                        <Home className="w-4 h-4" />
+                        返回主城
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="grid grid-cols-2 gap-3">
+                        <button
+                          onClick={onRetry}
+                          className="py-3 bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/30 font-bold rounded-xl transition-all flex flex-col items-center justify-center gap-1"
+                        >
+                          <RotateCcw className="w-5 h-5" />
+                          <span className="text-xs">重来</span>
+                        </button>
+                        <button
+                          onClick={onExit}
+                          className="py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all flex flex-col items-center justify-center gap-1"
+                        >
+                          <ChevronLeft className="w-5 h-5" />
+                          <span className="text-xs">返回</span>
+                        </button>
+                      </div>
+                    </>
                   )}
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      onClick={onRetry}
-                      className="py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2"
-                    >
-                      <Play className="w-4 h-4" />
-                      重新来过
-                    </button>
-                    <button
-                      onClick={onExit}
-                      className="py-3 bg-white/10 hover:bg-white/20 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2"
-                    >
-                      <ChevronLeft className="w-4 h-4" />
-                      退出战斗
-                    </button>
-                  </div>
                 </div>
               </div>
             </motion.div>

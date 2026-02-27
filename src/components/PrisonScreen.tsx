@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Skull, Heart, Zap, Flame, Trash2, Users, Lock, Unlock, Baby, AlertTriangle } from 'lucide-react';
-import { Player, Prisoner, Gender, HeroClass, Rarity, Hero, Stats, Race, BodyPart, MentalState } from '../types';
-import { PUNISHMENT_TEXTS } from '../constants';
-import { cn } from '../lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Skull, Heart, Zap, Flame, Trash2, Users, Lock, Unlock, Baby, AlertTriangle, MessageCircle } from 'lucide-react';
+import { Player, Prisoner, Gender, HeroClass, Rarity, Hero, Stats, Race, BodyPart, MentalState } from '@/types';
+import { PUNISHMENT_TEXTS, PRISON_INTERACTION_TEXTS, BREAKDOWN_TEXTS, BREAKDOWN_PUNISHMENT_TEXTS } from '@/constants';
+import { cn } from '@/lib/utils';
 
 import HeroAvatar from './HeroAvatar';
 
@@ -16,6 +16,7 @@ interface PrisonScreenProps {
   onToggleLock: (id: string, type: 'hero' | 'offspring' | 'prisoner') => void;
   onBulkExecute: (rarities: Rarity[]) => void;
   onSpeedUpPregnancy: (id: string) => void;
+  onPrisonTalk?: (id: string) => void;
 }
 
 const RARITY_COLORS = {
@@ -25,6 +26,7 @@ const RARITY_COLORS = {
   [Rarity.S]: 'text-yellow-400',
   [Rarity.SS]: 'text-red-500',
   [Rarity.SSS]: 'text-white shadow-[0_0_10px_rgba(255,255,255,0.3)]',
+  [Rarity.SP]: 'text-purple-500 shadow-[0_0_15px_rgba(168,85,247,0.5)] font-black',
 };
 
 const RARITY_LABELS = {
@@ -34,6 +36,7 @@ const RARITY_LABELS = {
   [Rarity.S]: 'S级',
   [Rarity.SS]: 'SS级',
   [Rarity.SSS]: 'SSS级',
+  [Rarity.SP]: 'SP级',
 };
 
 export default function PrisonScreen({ 
@@ -56,44 +59,66 @@ export default function PrisonScreen({
   const selected = player.prisoners?.find(p => p.id === selectedId);
 
   const handleAction = (id: string, type: 'wax' | 'whip' | 'toy') => {
-    const reactions = {
-      wax: [
-        "滚烫的蜡油滴在皮肤上，囚犯发出痛苦的呻吟，意志开始动摇。",
-        "灼热的痛楚让囚犯浑身颤暴力地抖，眼神中充满了恐惧。",
-        "每一滴蜡油都像是烙印，囚犯的自尊在高温下逐渐融化。",
-        "你将蜡油滴在囚犯最敏感的部位，看着他因为剧痛而扭曲的面孔，心中充满了快感。",
-        "滚烫的液体顺着皮肤流淌，囚犯的呼吸变得急促，眼神中流露出绝望。"
-      ],
-      whip: [
-        "皮鞭划破空气的声音伴随着惨叫，囚犯的背部留下了触目惊心的红痕。",
-        "严酷的鞭刑让囚犯几乎昏厥，身体的痛苦远超意志的负荷。",
-        "在不断的抽打下，囚犯终于低下了高傲的头颅。",
-        "每一鞭都带起一片血花，囚犯的求饶声在空旷的囚室中回荡。",
-        "你无情地挥动长鞭，直到囚犯的身体不再颤抖，只剩下微弱的喘息。"
-      ],
-      toy: [
-        "极尽羞辱的玩弄让囚犯感到无地自容，精神防线彻底崩溃。",
-        "这种玩弄比肉体的痛苦更让他难以忍受，羞耻感吞噬了他的理智。",
-        "在你的嘲弄与玩弄下，囚犯的眼神变得空洞而绝望。",
-        "你用各种器具羞辱着他的尊严，看着他从愤怒到绝望，最后只剩下空洞的顺从。",
-        "这种精神上的折磨让他彻底丧失了反抗的意志，成为了你手中的玩物。"
-      ]
-    };
-    
-    const randomReaction = reactions[type][Math.floor(Math.random() * reactions[type].length)];
-    setFeedback(randomReaction);
+    if (selected?.mentalState === MentalState.BREAKDOWN) {
+      const texts = BREAKDOWN_PUNISHMENT_TEXTS;
+      const randomText = texts[Math.floor(Math.random() * texts.length)];
+      setFeedback(randomText);
+    } else {
+      const reactions = {
+        wax: [
+          "滚烫的蜡油滴在皮肤上，囚犯发出痛苦的呻吟，意志开始动摇。",
+          "灼热的痛楚让囚犯浑身颤暴力地抖，眼神中充满了恐惧。",
+          "每一滴蜡油都像是烙印，囚犯的自尊在高温下逐渐融化。",
+          "你将蜡油滴在囚犯最敏感的部位，看着他因为剧痛而扭曲的面孔，心中充满了快感。",
+          "滚烫的液体顺着皮肤流淌，囚犯的呼吸变得急促，眼神中流露出绝望。"
+        ],
+        whip: [
+          "皮鞭划破空气的声音伴随着惨叫，囚犯的背部留下了触目惊心的红痕。",
+          "严酷的鞭刑让囚犯几乎昏厥，身体的痛苦远超意志的负荷。",
+          "在不断的抽打下，囚犯终于低下了高傲的头颅。",
+          "每一鞭都带起一片血花，囚犯的求饶声在空旷的囚室中回荡。",
+          "你无情地挥动长鞭，直到囚犯的身体不再颤抖，只剩下微弱的喘息。"
+        ],
+        toy: [
+          "极尽羞辱的玩弄让囚犯感到无地自容，精神防线彻底崩溃。",
+          "这种玩弄比肉体的痛苦更让他难以忍受，羞耻感吞噬了他的理智。",
+          "在你的嘲弄与玩弄下，囚犯的眼神变得空洞而绝望。",
+          "你用各种器具羞辱着他的尊严，看着他从愤怒到绝望，最后只剩下空洞的顺从。",
+          "这种精神上的折磨让他彻底丧失了反抗的意志，成为了你手中的玩物。"
+        ]
+      };
+      
+      const randomReaction = reactions[type][Math.floor(Math.random() * reactions[type].length)];
+      setFeedback(randomReaction);
+    }
     onTorture(id, type);
     setTimeout(() => setFeedback(null), 3000);
   };
 
   const handleSexualPunishmentClick = (part: BodyPart) => {
     if (!selected) return;
-    const texts = PUNISHMENT_TEXTS[part];
-    const randomText = texts[Math.floor(Math.random() * texts.length)];
-    setFeedback(randomText);
+    
+    if (selected.mentalState === MentalState.BREAKDOWN) {
+      const texts = BREAKDOWN_PUNISHMENT_TEXTS;
+      const randomText = texts[Math.floor(Math.random() * texts.length)];
+      setFeedback(randomText);
+    } else {
+      const texts = PUNISHMENT_TEXTS[part];
+      const randomText = texts[Math.floor(Math.random() * texts.length)];
+      setFeedback(randomText);
+    }
+    
     onSexualPunishment(selected.id, part);
     setShowBodyPartSelect(false);
     setTimeout(() => setFeedback(null), 4000);
+  };
+
+  const handleTalk = () => {
+    if (!selected) return;
+    const texts = PRISON_INTERACTION_TEXTS;
+    const randomText = texts[Math.floor(Math.random() * texts.length)];
+    setFeedback(randomText);
+    setTimeout(() => setFeedback(null), 3000);
   };
 
   const handlePersuadeClick = () => {
@@ -175,11 +200,23 @@ export default function PrisonScreen({
             <div className="flex flex-col h-full">
               <div className="flex flex-col sm:flex-row gap-4 lg:gap-8 mb-6 lg:mb-8">
                 <div className="flex justify-center relative">
-                  <HeroAvatar name={selected.name} rarity={selected.rarity} size="lg" />
+                  <div className={cn(
+                    "relative transition-all duration-500",
+                    selected.rarity === Rarity.SP && "scale-110"
+                  )}>
+                    <HeroAvatar name={selected.name} rarity={selected.rarity} size="lg" />
+                    {selected.rarity === Rarity.SP && (
+                      <motion.div 
+                        animate={{ opacity: [0.3, 0.6, 0.3] }}
+                        transition={{ duration: 2, repeat: Infinity }}
+                        className="absolute -inset-2 bg-purple-500/20 blur-xl rounded-full -z-10"
+                      />
+                    )}
+                  </div>
                   <button 
                     onClick={() => onToggleLock(selected.id, 'prisoner')}
                     className={cn(
-                      "absolute -top-2 -right-2 p-2 rounded-full border transition-all shadow-lg",
+                      "absolute -top-2 -right-2 p-2 rounded-full border transition-all shadow-lg z-10",
                       selected.isLocked ? "bg-red-500 border-red-400 text-white" : "bg-zinc-800 border-white/10 text-white/40"
                     )}
                   >
@@ -231,6 +268,13 @@ export default function PrisonScreen({
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:gap-4 mt-auto">
                 <ActionButton 
+                  icon={<MessageCircle className="w-5 h-5" />}
+                  label="审讯/对话"
+                  desc="听听囚犯想说什么"
+                  onClick={handleTalk}
+                  color="zinc"
+                />
+                <ActionButton 
                   icon={<Heart className="w-5 h-5" />}
                   label="感化"
                   desc="尝试说服其加入你的阵营"
@@ -269,7 +313,7 @@ export default function PrisonScreen({
                 <ActionButton 
                   icon={<Trash2 className="w-5 h-5" />}
                   label="处决"
-                  desc={`处决可获得 ${selected.rarity === Rarity.SSS ? 500 : selected.rarity === Rarity.SS ? 200 : selected.rarity === Rarity.S ? 100 : 50} 钻石`}
+                  desc={`处决可获得 ${selected.rarity === Rarity.SP ? 2000 : selected.rarity === Rarity.SSS ? 500 : selected.rarity === Rarity.SS ? 200 : selected.rarity === Rarity.S ? 100 : 50} 钻石`}
                   onClick={() => onExecute(selected.id)}
                   color="zinc"
                 />
@@ -414,7 +458,7 @@ export default function PrisonScreen({
               </p>
               
               <div className="flex flex-wrap gap-2 mb-8">
-                {[Rarity.C, Rarity.B, Rarity.A].map(r => (
+                {[Rarity.C, Rarity.B, Rarity.A, Rarity.S, Rarity.SS].map(r => (
                   <button 
                     key={r}
                     onClick={() => setBulkRarities(prev => prev.includes(r) ? prev.filter(x => x !== r) : [...prev, r])}

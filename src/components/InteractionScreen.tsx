@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
-import { Player, Hero, Gender, Rarity, InventoryItem } from '../types';
-import { INTERACTION_ITEMS } from '../constants';
-import { cn } from '../lib/utils';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Player, Hero, Gender, Rarity, InventoryItem } from '@/types';
+import { INTERACTION_ITEMS, CHAT_TEXTS, SP_CHAT_TEXTS } from '@/constants';
+import { cn } from '@/lib/utils';
 import { Heart, Gift, MessageCircle, Edit3, Coins, UserCircle2, Baby, Zap, Clock } from 'lucide-react';
 
 interface InteractionScreenProps {
@@ -56,13 +56,7 @@ export default function InteractionScreen({
   };
 
   const handleChat = () => {
-    const messages = [
-      "今天的天气真不错，适合去冒险。",
-      "谢谢你一直以来的照顾。",
-      "我感觉到我的力量正在慢慢增强。",
-      "你觉得我这身装扮怎么样？",
-      "无论发生什么，我都会守护在你身边。",
-    ];
+    const messages = activeHero.rarity === Rarity.SP ? SP_CHAT_TEXTS : CHAT_TEXTS;
     setChatMessage(messages[Math.floor(Math.random() * messages.length)]);
     onUpdateAffection(activeHero.id, 2);
     setTimeout(() => setChatMessage(null), 3000);
@@ -80,8 +74,27 @@ export default function InteractionScreen({
   return (
     <div className="h-full flex flex-col md:flex-row p-4 gap-4 overflow-hidden">
       {/* Hero Visual */}
-      <div className="flex-1 relative rounded-3xl overflow-hidden border border-white/10 bg-zinc-900/50 flex items-center justify-center">
-        <span className="text-9xl font-bold opacity-10">{activeHero.name[0]}</span>
+      <div className={cn(
+        "flex-1 relative rounded-3xl overflow-hidden border flex items-center justify-center transition-all duration-500",
+        activeHero.rarity === Rarity.SP 
+          ? "bg-gradient-to-br from-purple-900/40 via-black to-red-900/40 border-purple-500/50 shadow-[0_0_50px_rgba(168,85,247,0.2)]" 
+          : "bg-zinc-900/50 border-white/10"
+      )}>
+        <span className={cn(
+          "text-9xl font-bold transition-all duration-500",
+          activeHero.rarity === Rarity.SP ? "text-purple-400 opacity-20 scale-110" : "opacity-10"
+        )}>{activeHero.name[0]}</span>
+        
+        {activeHero.rarity === Rarity.SP && (
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.4)_100%)]" />
+            <motion.div 
+              animate={{ opacity: [0.2, 0.5, 0.2] }}
+              transition={{ duration: 4, repeat: Infinity }}
+              className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-20" 
+            />
+          </div>
+        )}
         
         <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent" />
         
@@ -112,7 +125,7 @@ export default function InteractionScreen({
                 <h2 className="text-2xl font-bold">{activeHero.name}</h2>
                 <button 
                   onClick={() => onManualLevelUp(activeHero.id)}
-                  disabled={activeHero.level >= 80}
+                  disabled={activeHero.level >= 100}
                   className={cn(
                     "px-2 py-0.5 border rounded text-[10px] font-bold transition-all",
                     activeHero.isBreakthroughRequired 
@@ -232,27 +245,29 @@ export default function InteractionScreen({
         </div>
 
         {/* Gender Select */}
-        <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-4">
-          <h3 className="text-sm font-bold text-white/40 uppercase mb-3 flex items-center gap-2">
-            <UserCircle2 className="w-4 h-4" /> 自定义性别
-          </h3>
-          <div className="flex gap-2">
-            {[Gender.MALE, Gender.FEMALE, Gender.NON_BINARY].map(g => (
-              <button
-                key={g}
-                onClick={() => onUpdateGender(activeHero.id, g)}
-                className={cn(
-                  "flex-1 py-2 rounded-xl border text-sm font-bold transition-all",
-                  activeHero.gender === g 
-                    ? "bg-emerald-500 border-emerald-400 text-black" 
-                    : "bg-white/5 border-white/10 hover:bg-white/10"
-                )}
-              >
-                {g}
-              </button>
-            ))}
+        {!activeHero.isFixed && (
+          <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-4">
+            <h3 className="text-sm font-bold text-white/40 uppercase mb-3 flex items-center gap-2">
+              <UserCircle2 className="w-4 h-4" /> 自定义性别
+            </h3>
+            <div className="flex gap-2">
+              {[Gender.MALE, Gender.FEMALE, Gender.NON_BINARY].map(g => (
+                <button
+                  key={g}
+                  onClick={() => onUpdateGender(activeHero.id, g)}
+                  className={cn(
+                    "flex-1 py-2 rounded-xl border text-sm font-bold transition-all",
+                    activeHero.gender === g 
+                      ? "bg-emerald-500 border-emerald-400 text-black" 
+                      : "bg-white/5 border-white/10 hover:bg-white/10"
+                  )}
+                >
+                  {g}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Gift Shop */}
         <div className="bg-zinc-900/50 border border-white/10 rounded-2xl p-4 flex-1">

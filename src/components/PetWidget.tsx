@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Heart, Skull } from 'lucide-react';
-import { Pet } from '../types';
-import { cn } from '../lib/utils';
+import { Pet } from '@/types';
+import { cn } from '@/lib/utils';
 
 interface PetWidgetProps {
   pet: Pet;

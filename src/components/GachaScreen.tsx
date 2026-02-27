@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { Sparkles, Gem, X, Info } from 'lucide-react';
-import { Player, Hero, Rarity, Race } from '../types';
-import { cn } from '../lib/utils';
+import { Player, Hero, Rarity, Race } from '@/types';
+import { cn } from '@/lib/utils';
 
 interface GachaScreenProps {
   player: Player;
@@ -18,6 +18,7 @@ const RARITY_COLORS = {
   [Rarity.S]: 'border-yellow-500/30 bg-yellow-500/10 text-yellow-400',
   [Rarity.SS]: 'border-red-500/30 bg-red-500/10 text-red-500',
   [Rarity.SSS]: 'border-white/30 bg-white/5 text-white shadow-[0_0_10px_rgba(255,255,255,0.2)]',
+  [Rarity.SP]: 'border-purple-500/50 bg-purple-500/10 text-purple-400 shadow-[0_0_15px_rgba(168,85,247,0.4)]',
 };
 
 const RARITY_LABELS = {
@@ -27,6 +28,7 @@ const RARITY_LABELS = {
   [Rarity.S]: 'S级',
   [Rarity.SS]: 'SS级',
   [Rarity.SSS]: 'SSS级',
+  [Rarity.SP]: 'SP级',
 };
 
 export default function GachaScreen({ player, onSummon, onSetTargetRace, lastSummoned }: GachaScreenProps) {
@@ -77,7 +79,11 @@ export default function GachaScreen({ player, onSummon, onSetTargetRace, lastSum
             </div>
 
             <div className="mb-6">
-              <div className="text-[10px] text-white/40 font-mono uppercase mb-2">指定血统 (保底: {100 - player.pityCount}抽)</div>
+              <div className="flex flex-col gap-1 mb-3">
+                <div className="text-[10px] text-white/40 font-mono uppercase">SSS级保底: <span className="text-emerald-400 font-bold">{100 - player.pityCount}</span> 抽</div>
+                <div className="text-[10px] text-white/40 font-mono uppercase">SP级保底: <span className="text-purple-400 font-bold">{200 - player.spPityCount}</span> 抽</div>
+              </div>
+              <div className="text-[10px] text-white/40 font-mono uppercase mb-2">指定血统</div>
               <div className="flex flex-wrap justify-center gap-2 max-w-md mx-auto">
                 {specialRaces.map(race => (
                   <button
@@ -152,39 +158,41 @@ export default function GachaScreen({ player, onSummon, onSetTargetRace, lastSum
               </button>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 max-h-[60vh] overflow-y-auto p-2">
               {lastSummoned.map((hero, idx) => (
                 <motion.div
                   key={hero.id}
                   initial={{ opacity: 0, scale: 0.5, y: 20 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
-                  transition={{ delay: idx * 0.1 }}
+                  transition={{ delay: idx * 0.05 }}
                   className={cn(
-                    "rounded-2xl border p-4 flex flex-col items-center text-center transition-all hover:scale-105",
+                    "rounded-xl border p-3 flex flex-col items-center text-center transition-all hover:scale-105",
                     RARITY_COLORS[hero.rarity]
                   )}
                 >
-                  <div className="w-full aspect-square rounded-xl overflow-hidden mb-3 border border-white/10 bg-zinc-800 flex items-center justify-center">
-                    <span className="text-4xl font-bold opacity-20">{hero.name[0]}</span>
+                  <div className="w-full aspect-square rounded-lg overflow-hidden mb-2 border border-white/10 bg-zinc-800 flex items-center justify-center relative">
+                    <span className="text-3xl font-bold opacity-20">{hero.name[0]}</span>
+                    {hero.rarity === Rarity.SP && (
+                      <div className="absolute inset-0 bg-gradient-to-t from-purple-500/20 to-transparent pointer-events-none" />
+                    )}
                   </div>
-                  <div className="text-[10px] font-mono font-bold uppercase mb-1">
+                  <div className="text-[9px] font-mono font-bold uppercase mb-0.5">
                     {RARITY_LABELS[hero.rarity]} | {hero.race}
                   </div>
-                  <div className="text-sm font-bold truncate w-full">{hero.name}</div>
-                  <div className="mt-1 text-[10px] text-white/40 line-clamp-2 italic">"{hero.description}"</div>
-                  <div className="mt-2 flex flex-col gap-1 w-full">
-                    <div className="flex items-center justify-between text-[9px] text-white/40">
+                  <div className="text-xs font-bold truncate w-full">{hero.name}</div>
+                  <div className="mt-1 flex flex-col gap-0.5 w-full">
+                    <div className="flex items-center justify-between text-[8px] text-white/40">
                       <span>血统:</span>
                       <span className="text-emerald-400 font-bold">
                         {hero.bloodlines.find(b => b.race !== Race.HUMAN)?.purity || 0}%
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-white/60">
+                    <div className="flex items-center gap-1 justify-center">
+                      <span className="text-[8px] px-1 py-0.25 rounded bg-white/5 border border-white/10 text-white/60">
                         {hero.gender}
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold">
-                        评分: {hero.rating}
+                      <span className="text-[8px] px-1 py-0.25 rounded bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 font-bold">
+                        {hero.rating}
                       </span>
                     </div>
                   </div>
@@ -192,12 +200,28 @@ export default function GachaScreen({ player, onSummon, onSetTargetRace, lastSum
               ))}
             </div>
 
-            <div className="mt-12 flex justify-center">
+            <div className="mt-4 flex flex-wrap justify-center gap-3">
+              <button 
+                onClick={() => handleSummonClick(1)}
+                disabled={player.gems < 100}
+                className="px-5 py-2.5 bg-zinc-800 border border-white/10 text-white text-sm font-bold rounded-xl hover:bg-zinc-700 transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                <Gem className="w-4 h-4" />
+                再来一抽 (100)
+              </button>
+              <button 
+                onClick={() => handleSummonClick(10)}
+                disabled={player.gems < 900}
+                className="px-5 py-2.5 bg-emerald-500 text-black text-sm font-bold rounded-xl hover:bg-emerald-400 transition-all flex items-center gap-2 disabled:opacity-50"
+              >
+                <Gem className="w-4 h-4" />
+                再来十连 (900)
+              </button>
               <button 
                 onClick={() => setShowResults(false)}
-                className="px-12 py-4 bg-white text-black font-bold rounded-full hover:bg-white/90 transition-all"
+                className="px-5 py-2.5 bg-white/10 text-white text-sm font-bold rounded-xl hover:bg-white/20 transition-all"
               >
-                确认
+                返回召唤
               </button>
             </div>
           </motion.div>

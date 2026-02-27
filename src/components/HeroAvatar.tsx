@@ -1,6 +1,6 @@
 import React from 'react';
-import { cn } from '../lib/utils';
-import { Rarity } from '../types';
+import { cn } from '@/lib/utils';
+import { Rarity } from '@/types';
 
 interface HeroAvatarProps {
   name: string;
@@ -16,6 +16,7 @@ const RARITY_COLORS = {
   [Rarity.S]: 'from-yellow-500/20 to-yellow-500/40 border-yellow-500/50 text-yellow-300',
   [Rarity.SS]: 'from-red-500/20 to-red-500/40 border-red-500/50 text-red-300',
   [Rarity.SSS]: 'from-indigo-500/20 to-purple-500/40 border-white/50 text-white shadow-[0_0_15px_rgba(255,255,255,0.3)]',
+  [Rarity.SP]: 'from-purple-600/30 to-black border-purple-500/60 text-purple-200 shadow-[0_0_20px_rgba(168,85,247,0.5)]',
 };
 
 const SIZES = {

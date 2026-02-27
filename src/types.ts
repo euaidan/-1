@@ -8,7 +8,8 @@ export enum GameState {
   GENDER_SELECT = 'GENDER_SELECT',
   PRISON = 'PRISON',
   SHOP = 'SHOP',
-  OFFSPRING_TRAINING = 'OFFSPRING_TRAINING'
+  OFFSPRING_TRAINING = 'OFFSPRING_TRAINING',
+  GALLERY = 'GALLERY'
 }
 
 export enum MentalState {
@@ -33,7 +34,8 @@ export enum Rarity {
   A = 'A',
   S = 'S',
   SS = 'SS',
-  SSS = 'SSS'
+  SSS = 'SSS',
+  SP = 'SP'
 }
 
 export enum Race {
@@ -102,6 +104,7 @@ export interface Hero {
   isLocked?: boolean;
   isPinned?: boolean;
   isBreakthroughRequired?: boolean;
+  isFixed?: boolean;
   parents?: string[];
   grandparents?: string[];
 }
@@ -170,15 +173,19 @@ export interface Player {
   gems: number;
   exp: number;
   level: number;
-  currentStage: number; // This will now represent "Difficulty"
-  currentSubStage: number; // 1-11
-  clearedEliteStages: string[]; // "difficulty-substage"
+  currentStage: number; // Current Chapter (1-10)
+  currentSubStage: number; // Current Level (1-10)
+  unlockedChapter: number;
+  unlockedLevel: number;
+  clearedChapters: number[]; // Chapters that have already given a reward
+  clearedEliteStages: string[]; // "chapter-level"
   collection: Hero[];
   petCollection: Pet[];
   prisoners: Prisoner[];
   activeHeroId: string | null;
   activePetId: string | null;
   pityCount: number;
+  spPityCount: number;
   targetRace: Race;
   bloodlines: Bloodline[];
   offsprings: Offspring[];
