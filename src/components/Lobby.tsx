@@ -75,7 +75,7 @@ export default function Lobby({
           <div className="h-full rounded-3xl overflow-hidden border border-white/10 bg-zinc-900/50 flex flex-col">
             <div className="relative flex-1 flex flex-col p-4 z-20">
               {/* Pet Overlay */}
-              <div className="absolute top-4 right-4 z-30">
+              <div className="absolute top-6 right-4 z-30">
                 {activePet && <PetWidget pet={activePet} />}
               </div>
 
