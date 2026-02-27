@@ -7,8 +7,8 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
   
   return {
-    // 关键：添加base配置，仓库名是"-1"
-    base: '/-1/',
+    // 使用自定义域名，base改为根路径
+    base: '/',
     
     plugins: [react(), tailwind()],
     define: {
